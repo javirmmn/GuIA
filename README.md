@@ -1,64 +1,78 @@
-# PasoAPaso: prototipo pasivo (sin IA)
+# PasoAPaso
 
-Extensión de Chrome/Edge que **no hay que abrir**. Cuando la página coincide con una tarea, aparece sola una tarjeta pequeña en una esquina con **un paso corto**, y se marca en la página lo que hay que pulsar. Las tareas están escritas a mano en [extension/tasks.js](extension/tasks.js). El plan completo está en [PLANNING.md](PLANNING.md).
+Extensión de Chrome/Edge que guía paso a paso, con una tarjeta pequeña en una esquina y una marca sobre lo que hay que pulsar. El plan completo está en [PLANNING.md](PLANNING.md).
 
-## Qué hace
+Tiene dos formas de funcionar:
 
-| Página de la intranet | Qué aparece solo |
-|---|---|
-| Pedidos | «Pulsa «Nuevo pedido»». Si empiezas a escribir en la búsqueda, pasa a guiar la búsqueda. |
-| Nuevo pedido | 6 pasos: cliente, NIF, producto, cantidad, forma de pago y guardar. |
-| Pedido guardado | «✔ Pedido guardado». Se quita sola. |
-| Correo | «Abre un correo». Con un correo abierto: Responder → escribir → Enviar. |
-| Correo sospechoso | Aviso rojo: «Posible engaño». No se puede minimizar. |
+1. **Pasiva (sin IA):** en la intranet de ejemplo detecta sola la tarea y da los pasos. Está escrita a mano en [extension/tasks.js](extension/tasks.js).
+2. **Preguntando a la IA (Gemini), en cualquier página:** pulsas el botón 💬, escribes qué quieres hacer («enviar un correo a mi jefe») y te va dando **un paso cada vez**. Cuando haces el paso, pide el siguiente.
 
-- La tarjeta se **aparta sola** si tapa el botón marcado.
-- El botón **–** la reduce a una burbuja. Un clic en la burbuja la abre otra vez.
-- Si te saltas un paso o la página da un error, la tarjeta **vuelve sola al primer paso que falta**.
-- No tiene ajustes, ni voz, ni panel. No pide permisos al navegador: solo se ejecuta en las páginas indicadas en `manifest.json`.
+## Cómo funciona la IA
 
-## Cómo probarlo
+1. Lee la página: nombres de botones, enlaces y campos. **No envía lo que hay escrito en los campos** (solo si están vacíos), ni contraseñas. Tapa correos y números largos.
+2. Envía eso y tu objetivo a Gemini. Gemini devuelve **un solo paso** con el número del elemento.
+3. La extensión comprueba que ese elemento existe y lo marca. Si la IA inventa uno, no marca nada.
+4. Al usarlo (pulsar, escribir, elegir), mira la página otra vez y pide el siguiente. Si la página cambia, sigue sola.
+5. Los pasos que envían, guardan, borran o pagan salen en rojo con un aviso. Si hay que poner contraseñas, códigos o datos bancarios, **no guía**: dice que hace falta ayuda de una persona.
 
-Solo hace falta **Node.js**.
+## Instalación
 
-**1. Arrancar la intranet de ejemplo** (desde la carpeta `NBM`) y dejar la ventana abierta:
+Hace falta **Node.js** solo para la intranet de ejemplo.
+
+**1. Poner la clave de Gemini** (una vez):
+
+1. Copia `extension/config.example.js` como `extension/config.local.js`.
+2. Pega tu clave de https://aistudio.google.com/apikey en `apiKey`.
+
+`config.local.js` está en `.gitignore`: **no se sube a GitHub**. No compartas esa carpeta con nadie, porque lleva la clave dentro.
+
+**2. Cargar la extensión en Chrome**
+
+1. Abre `chrome://extensions` y activa **Modo de desarrollador**.
+2. Pulsa **Cargar descomprimida** y elige la carpeta `NBM\extension`.
+3. Si ya estaba cargada, pulsa ↻ y recarga las páginas abiertas (F5).
+
+En Edge es igual, desde `edge://extensions`.
+
+**3. (Opcional) Intranet de ejemplo**, desde la carpeta `NBM`:
 
 ```bash
 node demo-site/server.js
 ```
 
-**2. Cargar la extensión en Chrome**
+Y abre http://127.0.0.1:8080/.
 
-1. Abre `chrome://extensions`.
-2. Activa **Modo de desarrollador** (arriba a la derecha).
-3. Pulsa **Cargar descomprimida** y elige la carpeta `NBM\extension`.
-4. Abre http://127.0.0.1:8080/ y navega por la intranet. No hay que pulsar nada más.
+## Cómo se usa
 
-En Edge es igual, desde `edge://extensions`.
+- En **cualquier página** verás un botón redondo 💬 abajo a la derecha. Púlsalo, escribe qué quieres hacer y pulsa ➤.
+- La tarjeta dice «Pensando…» un par de segundos y muestra el primer paso, con la marca en la página.
+- Haz el paso. La tarjeta pide el siguiente sola. Si no avanza, pulsa **Siguiente**.
+- La tarjeta muestra los pasos como lista: los hechos van **tachados en verde**, el actual resaltado con 👉. El resto de la pantalla se oscurece para destacar lo que hay que pulsar. **🔊** lee un paso en voz alta.
+- **✕** termina la guía. **Esc** cierra la casilla de pregunta.
+- En la intranet de ejemplo, además, la tarjeta aparece sola con las tareas escritas a mano.
 
-**3. Después de cambiar el código:** pulsa ↻ en la extensión y recarga la página (F5).
+Prueba rápida: abre la intranet, pulsa 💬 y escribe «registrar un pedido nuevo».
 
-## Problemas frecuentes
+## Límites y avisos
 
-| Problema | Solución |
+- **Datos y privacidad.** Lo que se lee de la página sale hacia Google cuando preguntas. Con el **nivel gratuito**, Google puede usarlo para mejorar sus productos, y sus condiciones no permiten usarlo con usuarios del Espacio Económico Europeo, Suiza o Reino Unido. **Para la demo, usa solo datos ficticios.** Para uso real hace falta activar la facturación o usar Azure OpenAI (ver PLANNING.md).
+- **La clave está dentro de la extensión** (en tu carpeta). Vale para una demo en tu ordenador. Para repartirla hace falta un servidor intermedio que guarde la clave.
+- **Cuota gratuita:** unas 10 preguntas por minuto. Si sale «Hay muchas preguntas», espera un momento y pulsa «Probar otra vez».
+- **Permisos:** la extensión se activa en **todas las páginas** (`<all_urls>`) y muestra el aviso de Chrome «leer y cambiar sus datos en todos los sitios». Solo habla con Google cuando preguntas. Para un piloto en empresa conviene limitarla a sus dominios.
+- **Qué no ve:** páginas internas de Chrome (`chrome://`), la tienda de extensiones, PDF, y webs que dibujan todo en un `canvas` (Google Docs, por ejemplo). Tampoco entra en `iframe`. Para abrir archivos locales hay que activar «Permitir el acceso a las URL de archivo» en la extensión.
+- **La IA puede equivocarse.** Si dice algo que no cuadra, pulsa ✕ y pide ayuda a una persona.
+- **Gmail y Outlook** tienen páginas complejas. Está probado con una página que imita a Gmail y con la intranet; en el correo real hay que probarlo y ajustarlo.
+
+## Archivos
+
+| Archivo | Para qué |
 |---|---|
-| No aparece la tarjeta | Recarga la página (F5). Comprueba que la extensión está activada y que estás en `127.0.0.1` o `localhost`. |
-| Quiero usar los HTML sin servidor | En `chrome://extensions` → PasoAPaso → Detalles, activa «Permitir el acceso a las URL de archivo». |
-| El puerto 8080 está ocupado | En PowerShell: `$env:PORT=9000; node demo-site/server.js` y abre `http://127.0.0.1:9000/`. |
-
-## Cómo añadir o cambiar una tarea
-
-Edita [extension/tasks.js](extension/tasks.js). Cada tarea dice cuándo está activa (`when`) y sus pasos. Cada paso lleva una frase corta (`text`), el elemento a marcar (`target`) y cuándo está hecho (`done`). Al principio del archivo está explicado cada campo.
-
-## Límites del prototipo
-
-- Sin IA: solo funciona con la intranet de ejemplo.
-- En «Pedidos» se supone que la persona quiere hacer un pedido nuevo, salvo que empiece a buscar. Con IA, la tarea se sacará del correo o de la lista de tareas.
-- No funciona dentro de iframes ni en aplicaciones que dibujan la pantalla en un `canvas`.
-- Para un piloto hay que limitar `matches` en `manifest.json` a los dominios de la empresa.
-
-## Carpetas
-
-- `extension/`: la extensión (3 archivos: `manifest.json`, `tasks.js`, `content.js`).
-- `demo-site/`: la intranet ficticia.
-- `archivo/extension-panel-v0/`: la primera versión, con panel lateral. Ya no se usa.
+| `extension/manifest.json` | Permisos y archivos de la extensión |
+| `extension/content.js` | Tarjeta, marca en la página y bucle de pasos |
+| `extension/snapshot.js` | Lee la página (qué botones y campos hay) |
+| `extension/background.js` | Habla con Gemini y recuerda la guía si la página se recarga |
+| `extension/gemini.js` | Instrucciones y llamada a Gemini |
+| `extension/tasks.js` | Tareas escritas a mano (solo intranet de ejemplo) |
+| `extension/config.local.js` | **Tu clave. No se sube a GitHub** |
+| `demo-site/` | Intranet ficticia |
+| `archivo/extension-panel-v0/` | Primera versión con panel lateral (ya no se usa) |

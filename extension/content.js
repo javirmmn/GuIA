@@ -1,68 +1,113 @@
-// PasoAPaso: extensión pasiva. No hay que abrir nada.
-// Si la página coincide con una tarea (tasks.js), aparece una tarjeta pequeña en una esquina
-// con UN paso, y se marca en la página el elemento que hay que usar.
-// Todo se calcula mirando el estado de la página, así que no hace falta detectar clics.
+// PasoAPaso: tarjeta pequeña en una esquina, con UN paso, y una marca en la página.
+// Dos modos:
+//   - Automático: en la intranet de ejemplo, tareas escritas a mano (tasks.js) que se detectan solas.
+//   - IA: en cualquier página, la persona escribe qué quiere hacer y Gemini va dando los pasos de uno en uno.
 (() => {
   window.__pasoapasoStop?.();
 
+  const DEMO = /^(127\.0\.0\.1|localhost)?$/.test(location.hostname); // las tareas escritas a mano solo valen aquí
   const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const INTERACTIVE = 'a[href], button, input, select, textarea, summary, label, [role="button"], [role="link"], [role="tab"]';
-  const COLORS = { step: "#f5a300", warn: "#d93025", danger: "#d93025", ok: "#1e8e3e" };
+  const COLORS = { step: "#f5a300", warn: "#d93025", danger: "#d93025", ok: "#1e8e3e" }; // marca en la página
+  const CARD = { step: "#2563eb", warn: "#d93025", danger: "#d93025", ok: "#1e8e3e" }; // color de la tarjeta
   const CORNERS = ["br", "bl", "tr", "tl"];
   const MARGIN = 16;
   const EVENTS = ["input", "change", "click", "focusin", "focusout", "popstate", "hashchange"];
+  const FONT = '"Segoe UI", system-ui, sans-serif';
 
   const CSS = `
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
-    .card, .pill, .ring { position: fixed; font-family: "Segoe UI", system-ui, sans-serif; }
+    .card, .pill, .fab, .ring { position: fixed; font-family: ${FONT}; }
     [data-pos="br"] { right: 16px; bottom: 16px; }
     [data-pos="bl"] { left: 16px; bottom: 16px; }
     [data-pos="tr"] { right: 16px; top: 16px; }
     [data-pos="tl"] { left: 16px; top: 16px; }
 
     .card {
-      width: 290px; max-width: calc(100vw - 32px); padding: 10px 14px 14px;
-      background: #fff; color: #14213d; border: 3px solid var(--c); border-radius: 16px;
+      width: 340px; max-width: calc(100vw - 32px); padding: 14px 16px 16px;
+      background: #fff; color: #14213d; border: 3px solid var(--c); border-radius: 18px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, .28); pointer-events: auto;
     }
     .card[data-kind="danger"] { background: #fff1f0; }
-    .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #4b5565; font-size: 14px; font-weight: 600; }
-    .min {
-      width: 36px; height: 36px; flex: none; font-size: 20px; line-height: 1; color: #333;
-      background: #fff; border: 1px solid #cfd5df; border-radius: 10px; cursor: pointer;
+    .top { display: flex; align-items: center; gap: 8px; }
+    .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 700; color: #111827; }
+    .counter { flex: none; font-size: 16px; font-weight: 700; color: var(--c); }
+    .btns { display: flex; gap: 4px; flex: none; }
+    .hb {
+      width: 32px; height: 32px; font-size: 16px; line-height: 1; color: #4b5563;
+      background: transparent; border: 1px solid #d1d5db; border-radius: 9px; cursor: pointer;
     }
-    .dots { display: flex; gap: 6px; margin: 4px 0 8px; }
-    .dots i { width: 10px; height: 10px; border-radius: 50%; background: #d9dee7; }
-    .dots i.on { background: var(--c); }
-    .dots i.cur { background: var(--c); outline: 2px solid var(--c); outline-offset: 2px; }
-    .text { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 700; }
-    .sub { margin: 6px 0 0; font-size: 16px; line-height: 1.3; color: #3b4252; }
+    .bar { height: 10px; margin: 10px 0 2px; overflow: hidden; background: #e5e7eb; border-radius: 999px; }
+    .fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #2563eb, #10b981); transition: width .3s; }
+
+    .row {
+      display: flex; align-items: center; gap: 10px; min-height: 46px; margin-top: 10px; padding: 6px 8px 6px 12px;
+      font-size: 16px; line-height: 1.25; color: #374151; background: #f8fafc; border: 2px solid #e5e7eb; border-radius: 12px;
+    }
+    .mark { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: #ddd6fe; font-size: 14px; font-weight: 700; color: #fff; }
+    .rt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .row.done { color: #166534; background: #dcfce7; border-color: #86efac; }
+    .row.done .rt { text-decoration: line-through; }
+    .row.done .mark, .row.ok .mark { background: #22c55e; }
+    .row.done .mark::before, .row.ok .mark::before { content: "✓"; }
+    .row.cur { font-size: 17px; font-weight: 700; color: #1d4ed8; background: #eff6ff; border-color: #60a5fa; }
+    .row.cur .mark { width: auto; background: transparent; font-size: 22px; }
+    .card[data-kind="warn"] .row.cur { color: #b3261e; background: #fff1f0; border-color: #f28b82; }
+    .row.ok { font-weight: 700; color: #166534; background: #dcfce7; border-color: #22c55e; }
+    .row.danger { font-weight: 700; color: #b3261e; background: #fee2e2; border-color: #d93025; }
+    .row.danger .mark { background: transparent; font-size: 20px; }
+    .spk { flex: none; width: 34px; height: 34px; font-size: 17px; line-height: 1; background: transparent; border: 0; border-radius: 8px; cursor: pointer; opacity: .65; }
+    .spk:hover { opacity: 1; background: rgba(0, 0, 0, .06); }
+    .sub { margin: 10px 2px 0; font-size: 15px; line-height: 1.3; color: #3b4252; }
+
+    .ask { display: flex; gap: 8px; margin-top: 8px; }
+    .ask input {
+      flex: 1; min-width: 0; height: 48px; padding: 0 12px; font: 18px ${FONT}; color: #14213d;
+      background: #fff; border: 2px solid #b9c1ce; border-radius: 12px;
+    }
+    .ask button { width: 48px; height: 48px; font-size: 20px; color: #fff; background: #1a56c4; border: 0; border-radius: 12px; cursor: pointer; }
+    .actions { margin-top: 14px; }
+    .next {
+      width: 100%; height: 54px; font: 700 18px ${FONT}; color: #fff;
+      background: var(--c); border: 0; border-radius: 14px; cursor: pointer;
+    }
 
     .pill {
-      min-width: 48px; height: 48px; padding: 0 12px; font: 700 16px/1 "Segoe UI", system-ui, sans-serif;
+      min-width: 48px; height: 48px; padding: 0 12px; font: 700 16px/1 ${FONT};
       color: #14213d; background: #fff; border: 3px solid var(--c); border-radius: 999px;
       box-shadow: 0 6px 18px rgba(0, 0, 0, .28); cursor: pointer; pointer-events: auto;
     }
+    .fab {
+      width: 52px; height: 52px; font-size: 24px; line-height: 1; color: #14213d;
+      background: #fff; border: 3px solid #1a56c4; border-radius: 50%;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .3); cursor: pointer; pointer-events: auto;
+    }
 
+    /* La marca oscurece el resto de la pantalla (la sombra enorme); los clics pasan a través. */
     .ring {
-      border: 4px solid var(--c); border-radius: 10px; pointer-events: none;
-      box-shadow: 0 0 0 3px rgba(20, 20, 20, .85), 0 0 18px 4px color-mix(in srgb, var(--c) 55%, transparent);
+      border: 4px solid var(--ring); border-radius: 10px; pointer-events: none;
+      box-shadow: 0 0 0 3px rgba(20, 20, 20, .85), 0 0 18px 4px color-mix(in srgb, var(--ring) 55%, transparent), 0 0 0 100vmax rgba(15, 23, 42, .5);
       animation: pulse 1.6s ease-in-out infinite;
     }
-    @keyframes pulse { 50% { box-shadow: 0 0 0 3px rgba(20, 20, 20, .85), 0 0 4px 0 transparent; } }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 3px rgba(20, 20, 20, .85), 0 0 4px 0 transparent, 0 0 0 100vmax rgba(15, 23, 42, .5); } }
     @media (prefers-reduced-motion: reduce) { .ring { animation: none; } }
     :focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
   `;
 
   const st = {
+    mode: "auto", // auto | ask | ai
     collapsed: false,
     corner: "br",
     targetEl: null,
     scrolledFor: "",
-    dismissed: "", // clave de la situación ya terminada y ocultada
+    dismissed: "", // clave de la tarea ya terminada y ocultada (modo automático)
     timerKey: "",
     finishTimer: 0,
+    lastMutation: Date.now(),
+    askFocus: false,
+    listSignature: "",
+    ai: null,
     queued: 0,
     raf: 0,
   };
@@ -74,11 +119,17 @@
 
   let host = null;
   let els = null;
-  let dotsSignature = "";
 
   // ---------- Utilidades
 
   const $ = (selector) => document.querySelector(selector);
+  const safe = (fn, fallback) => {
+    try {
+      return fn();
+    } catch {
+      return fallback;
+    }
+  };
   const norm = (s) =>
     String(s ?? "")
       .toLowerCase()
@@ -86,6 +137,19 @@
       .replace(/[̀-ͯ]/g, "")
       .replace(/\s+/g, " ")
       .trim();
+
+  // Se crean los elementos uno a uno (sin innerHTML): hay páginas, como las de Google, que lo bloquean.
+  function h(tag, props = {}, ...children) {
+    const el = document.createElement(tag);
+    for (const [name, value] of Object.entries(props)) {
+      if (value === false || value == null) continue;
+      if (name === "text") el.textContent = value;
+      else if (name === "class") el.className = value;
+      else el.setAttribute(name, value === true ? "" : value);
+    }
+    el.append(...children);
+    return el;
+  }
 
   function isVisible(el) {
     if (!el || !el.isConnected) return false;
@@ -125,6 +189,14 @@
     return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
   }
 
+  function scrollToOnce(el, key) {
+    if (!el || st.scrolledFor === key) return;
+    st.scrolledFor = key;
+    if (!inView(el)) el.scrollIntoView({ block: "center", inline: "nearest", behavior: REDUCED_MOTION ? "auto" : "smooth" });
+  }
+
+  // ---------- MODO AUTOMÁTICO: tareas escritas a mano (solo en la intranet de ejemplo)
+
   function isDone(done) {
     if (!done || done.never) return false;
     if (done.any) return done.any.some(isDone);
@@ -139,18 +211,9 @@
     return true;
   }
 
-  const safe = (fn, fallback) => {
-    try {
-      return fn();
-    } catch {
-      return fallback;
-    }
-  };
-
-  // ---------- Qué tarea y qué paso toca ahora
-
   function compute() {
-    const task = (window.PP_TASKS || []).find((t) => safe(t.when, false));
+    const tasks = DEMO ? window.PP_TASKS || [] : [];
+    const task = tasks.find((t) => safe(t.when, false));
     if (!task) return null;
     const steps = task.steps || [];
     return {
@@ -161,10 +224,9 @@
     };
   }
 
-  function update() {
-    st.queued = 0;
+  function autoUpdate() {
     const ctx = compute();
-    if (!ctx) return hide();
+    if (!ctx) return showIdle();
 
     const { task, steps, index, key } = ctx;
     let view;
@@ -182,9 +244,10 @@
         n: index + 1,
         total: steps.length,
         target: step.target,
+        items: steps.map((s, i) => ({ text: s.text, state: i === index ? "cur" : isDone(s.done) ? "done" : "todo" })),
       };
     } else {
-      if (key === st.dismissed) return hide();
+      if (key === st.dismissed) return showIdle();
       const end = safe(() => task.finish(), { text: "✔ Hecho", kind: "ok" });
       view = {
         kind: end.kind || "ok",
@@ -194,6 +257,10 @@
         total: steps.length,
         target: end.target,
         done: true,
+        items: [
+          ...steps.map((s) => ({ text: s.text, state: "done" })),
+          { text: end.text, state: end.kind === "danger" ? "danger" : "ok" },
+        ],
       };
       if (end.hideAfter && st.timerKey !== key) {
         st.timerKey = key;
@@ -204,35 +271,148 @@
         }, end.hideAfter);
       }
     }
-    show(task, view);
+    showTask(task, view);
   }
-
-  const queue = () => {
-    if (!st.queued) st.queued = setTimeout(update, 60);
-  };
 
   // ---------- Tarjeta y marca en la página (dentro de un Shadow DOM para no mezclarse con la página)
 
   function ensureOverlay() {
     if (host?.isConnected) return;
-    host = document.createElement("div");
-    host.id = "pasoapaso-overlay";
+    host = h("div", { id: "pasoapaso-overlay" });
     host.style.cssText = "all: initial; position: fixed; inset: 0; pointer-events: none; z-index: 2147483647; display: none;";
     const root = host.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${CSS}</style>
-      <div class="ring" hidden></div>
-      <div class="card" data-pos="br" role="status" aria-live="polite" hidden>
-        <div class="top"><span class="title"></span><button class="min" type="button" aria-label="Minimizar" title="Minimizar">–</button></div>
-        <div class="dots" role="img" hidden></div>
-        <p class="text"></p>
-        <p class="sub" hidden></p>
-      </div>
-      <button class="pill" data-pos="br" type="button" hidden></button>`;
-    const q = (selector) => root.querySelector(selector);
-    els = { ring: q(".ring"), card: q(".card"), title: q(".title"), min: q(".min"), dots: q(".dots"), text: q(".text"), sub: q(".sub"), pill: q(".pill") };
+
+    els = {};
+    els.ring = h("div", { class: "ring", hidden: true });
+    els.title = h("span", { class: "title" });
+    els.askbtn = h("button", { class: "hb", type: "button", "aria-label": "Preguntar a la IA", title: "Preguntar", text: "💬" });
+    els.end = h("button", { class: "hb", type: "button", "aria-label": "Terminar", title: "Terminar", text: "✕" });
+    els.min = h("button", { class: "hb", type: "button", "aria-label": "Minimizar", title: "Minimizar", text: "–" });
+    els.counter = h("span", { class: "counter", hidden: true });
+    els.fill = h("div", { class: "fill" });
+    els.bar = h("div", { class: "bar", role: "progressbar", "aria-label": "Progreso", "aria-valuemin": "0", "aria-valuemax": "100", hidden: true }, els.fill);
+    els.list = h("div", { class: "list", role: "list", "aria-live": "polite" });
+    els.sub = h("p", { class: "sub", hidden: true });
+    els.input = h("input", { type: "text", maxlength: "200", autocomplete: "off", placeholder: "¿Qué quieres hacer?", "aria-label": "¿Qué quieres hacer?" });
+    els.send = h("button", { type: "submit", "aria-label": "Preguntar", title: "Preguntar", text: "➤" });
+    els.form = h("form", { class: "ask", hidden: true }, els.input, els.send);
+    els.next = h("button", { class: "next", type: "button", text: "Siguiente Paso →" });
+    els.actions = h("div", { class: "actions", hidden: true }, els.next);
+    els.card = h(
+      "div",
+      { class: "card", "data-pos": "br", role: "region", "aria-label": "PasoAPaso", hidden: true },
+      h("div", { class: "top" }, els.title, els.counter, h("span", { class: "btns" }, els.askbtn, els.end, els.min)),
+      els.bar,
+      els.list,
+      els.sub,
+      els.form,
+      els.actions,
+    );
+    els.pill = h("button", { class: "pill", "data-pos": "br", type: "button", hidden: true });
+    els.fab = h("button", { class: "fab", "data-pos": "br", type: "button", "aria-label": "Preguntar a la IA", title: "Preguntar a la IA", text: "💬", hidden: true });
+    root.append(h("style", { text: CSS }), els.ring, els.card, els.pill, els.fab);
+
+    els.askbtn.addEventListener("click", enterAsk);
+    els.fab.addEventListener("click", enterAsk);
+    els.end.addEventListener("click", () => (st.mode === "ai" ? endAi() : leaveAsk()));
     els.min.addEventListener("click", () => setCollapsed(true));
     els.pill.addEventListener("click", () => setCollapsed(false));
+    els.next.addEventListener("click", onNext);
+    els.form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const goal = els.input.value.trim();
+      if (goal) startAi(goal);
+    });
+    // Que las teclas escritas aquí no activen los atajos de la página (Gmail, por ejemplo).
+    for (const type of ["keydown", "keyup", "keypress"]) {
+      els.input.addEventListener(type, (event) => {
+        event.stopPropagation();
+        if (type === "keydown" && event.key === "Escape") leaveAsk();
+      });
+    }
     document.documentElement.append(host);
+  }
+
+  const setText = (el, value) => {
+    if (el.textContent !== value) el.textContent = value;
+  };
+
+  function ui({ ask = false, end = false, min = false, form = false, actions = false } = {}) {
+    els.askbtn.hidden = !ask;
+    els.end.hidden = !end;
+    els.min.hidden = !min;
+    els.form.hidden = !form;
+    els.actions.hidden = !actions;
+  }
+
+  function open(kind) {
+    ensureOverlay();
+    host.style.display = "block";
+    host.style.setProperty("--c", CARD[kind] || CARD.step);
+    host.style.setProperty("--ring", COLORS[kind] || COLORS.step);
+  }
+
+  // Leer un paso en voz alta (voz del navegador, el texto no sale del ordenador).
+  function speak(text) {
+    try {
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(String(text).replace(/[«»]/g, "").replace(/^✔\s*/, ""));
+      utterance.lang = "es-ES";
+      utterance.rate = 0.95;
+      speechSynthesis.speak(utterance);
+    } catch {
+      // sin voz disponible
+    }
+  }
+
+  function row(item) {
+    const speaker =
+      item.speak === false || typeof speechSynthesis === "undefined"
+        ? null
+        : h("button", { class: "spk", type: "button", "aria-label": `Leer en voz alta: ${item.text}`, title: "Escuchar", text: "🔊" });
+    speaker?.addEventListener("click", () => speak(item.text));
+    const mark = h("span", { class: "mark", "aria-hidden": "true", text: item.state === "cur" ? "👉" : item.state === "danger" ? "⚠️" : "" });
+    return h("div", { class: `row ${item.state}`, role: "listitem" }, ...[mark, h("span", { class: "rt", text: item.text }), speaker].filter(Boolean));
+  }
+
+  // Pinta contador, barra de progreso, lista de pasos y la línea de ayuda.
+  function render(view) {
+    const total = view.total > 1 ? view.total : 0;
+    const counter = view.counter ?? (total ? `${view.n}/${total}` : "");
+    setText(els.counter, counter);
+    els.counter.hidden = !counter;
+
+    const progress = view.progress !== undefined ? view.progress : total ? (view.done ? 1 : view.n / total) : null;
+    els.bar.hidden = progress == null;
+    if (progress != null) {
+      els.fill.style.width = `${Math.round(progress * 100)}%`;
+      els.bar.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
+    }
+
+    els.list.hidden = false;
+    const signature = JSON.stringify(view.items);
+    if (signature !== st.listSignature) {
+      st.listSignature = signature;
+      els.list.replaceChildren(...view.items.map(row));
+    }
+
+    setText(els.sub, view.sub || "");
+    els.sub.hidden = !view.sub;
+    return total;
+  }
+
+  function setTarget(el) {
+    st.targetEl = el;
+    if (!el && els) els.ring.hidden = true;
+  }
+
+  function showIdle() {
+    setTarget(null);
+    if (st.mode !== "auto") return;
+    open("step");
+    els.card.hidden = true;
+    els.pill.hidden = true;
+    els.fab.hidden = false;
   }
 
   function setCollapsed(value) {
@@ -245,59 +425,271 @@
     update();
   }
 
-  const setText = (el, value) => {
-    if (el.textContent !== value) el.textContent = value;
-  };
-
-  function show(task, view) {
-    ensureOverlay();
+  function showTask(task, view) {
     const forced = view.kind === "danger"; // un aviso de engaño no se puede minimizar
     const collapsed = st.collapsed && !forced;
-
-    host.style.display = "block";
-    host.style.setProperty("--c", COLORS[view.kind] || COLORS.step);
+    open(view.kind);
+    els.fab.hidden = true;
     els.card.hidden = collapsed;
     els.pill.hidden = !collapsed;
     els.card.dataset.kind = view.kind;
-    els.min.hidden = forced;
+    ui({ ask: true, min: !forced });
 
     setText(els.title, `${task.icon} ${task.title}`);
-    setText(els.text, view.text);
-    setText(els.sub, view.sub);
-    els.sub.hidden = !view.sub;
-
-    const total = view.total > 1 ? view.total : 0;
-    const signature = `${view.n}/${total}/${view.done ? 1 : 0}`;
-    els.dots.hidden = !total;
-    if (total && signature !== dotsSignature) {
-      els.dots.replaceChildren(
-        ...Array.from({ length: total }, (_, i) => {
-          const dot = document.createElement("i");
-          dot.className = view.done || i < view.n - 1 ? "on" : i === view.n - 1 ? "cur" : "";
-          return dot;
-        }),
-      );
-      els.dots.setAttribute("aria-label", view.done ? "Terminado" : `Paso ${view.n} de ${total}`);
-    }
-    dotsSignature = signature;
+    const total = render(view);
 
     setText(els.pill, view.done ? `${task.icon} ✔` : total ? `${task.icon} ${view.n}/${total}` : task.icon);
     els.pill.setAttribute("aria-label", `Mostrar ayuda: ${view.text}`);
 
-    st.targetEl = collapsed ? null : findTarget(view.target);
-    const scrollKey = `${task.id}:${view.n}:${view.text}`;
-    if (st.targetEl && st.scrolledFor !== scrollKey) {
-      st.scrolledFor = scrollKey;
-      if (!inView(st.targetEl)) {
-        st.targetEl.scrollIntoView({ block: "center", inline: "nearest", behavior: REDUCED_MOTION ? "auto" : "smooth" });
-      }
+    setTarget(collapsed ? null : findTarget(view.target));
+    scrollToOnce(st.targetEl, `${task.id}:${view.n}:${view.text}`);
+  }
+
+  // ---------- Pregunta a la IA
+
+  function enterAsk() {
+    st.mode = "ask";
+    st.askFocus = true;
+    els.input.value = "";
+    update();
+  }
+
+  function leaveAsk() {
+    st.mode = st.ai ? "ai" : "auto";
+    update();
+  }
+
+  function showAsk() {
+    open("step");
+    els.fab.hidden = true;
+    els.pill.hidden = true;
+    els.card.hidden = false;
+    els.card.dataset.kind = "step";
+    ui({ end: true, form: true });
+    els.list.hidden = true;
+    els.bar.hidden = true;
+    els.counter.hidden = true;
+    els.sub.hidden = true;
+    setText(els.title, "💬 Pregunta");
+    setTarget(null);
+    if (st.askFocus) {
+      st.askFocus = false;
+      setTimeout(() => els.input.focus(), 0);
     }
   }
 
-  function hide() {
-    st.targetEl = null;
-    if (host) host.style.display = "none";
+  // Pasos que envían, borran, pagan o publican: se avisa aunque la IA no lo marque.
+  const RISKY = /(enviar|send|guardar|pagar|comprar|borrar|eliminar|publicar|confirmar|submit|pedir ahora)/i;
+  const looksRisky = (el) => Boolean(el) && RISKY.test(accessibleName(el).slice(0, 60)) && !/borrador|draft|cancel/i.test(accessibleName(el));
+
+  function newAi(goal, history = []) {
+    return { goal, history, seq: 0, thinking: true, step: null, el: null, error: "", completing: false, cleanup: null, url: location.href, doneTimer: 0 };
   }
+
+  function startAi(goal) {
+    st.ai?.cleanup?.();
+    st.ai = newAi(goal);
+    st.mode = "ai";
+    saveSession();
+    requestNext();
+  }
+
+  function endAi() {
+    const ai = st.ai;
+    if (ai) {
+      ai.cleanup?.();
+      clearTimeout(ai.doneTimer);
+    }
+    st.ai = null;
+    st.mode = "auto";
+    send({ type: "PP_END" });
+    update();
+  }
+
+  function send(message) {
+    try {
+      return chrome.runtime.sendMessage(message).catch((e) => {
+        st.sendError = String(e?.message || e);
+        return null;
+      });
+    } catch (e) {
+      st.sendError = String(e?.message || e); // la extensión se ha recargado: esta página ya no puede hablar con ella
+      return Promise.resolve(null);
+    }
+  }
+
+  const saveSession = () => st.ai && send({ type: "PP_SESSION", session: { goal: st.ai.goal, history: st.ai.history } });
+
+  // Espera a que la página termine de cambiar (después de pulsar algo) antes de volver a mirarla.
+  function settle(maxMs = 1800, quietMs = 450) {
+    const start = Date.now();
+    st.lastMutation = Date.now();
+    return new Promise((resolve) => {
+      const tick = () => {
+        const now = Date.now();
+        if (now - st.lastMutation >= quietMs || now - start >= maxMs) resolve();
+        else setTimeout(tick, 100);
+      };
+      setTimeout(tick, quietMs);
+    });
+  }
+
+  async function requestNext() {
+    const ai = st.ai;
+    if (!ai) return;
+    const seq = ++ai.seq;
+    ai.cleanup?.();
+    Object.assign(ai, { cleanup: null, thinking: true, step: null, el: null, error: "", errorDetail: "", reload: false, completing: false, missing: false });
+    update();
+
+    const snap = window.PP_snapshot();
+    st.sendError = "";
+    const res = await send({ type: "PP_NEXT", payload: { goal: ai.goal, history: ai.history, page: snap.page, elements: snap.lines } });
+    if (st.ai !== ai || ai.seq !== seq) return; // se ha cancelado o hay una petición más nueva
+
+    ai.thinking = false;
+    ai.url = location.href;
+    if (!res) {
+      // La página no ha podido hablar con la extensión. Lo más típico: se recargó la extensión y esta página es una copia vieja.
+      const stale = !safe(() => chrome.runtime.id, "") || /context invalidated/i.test(st.sendError);
+      ai.reload = stale;
+      ai.error = stale ? "La extensión se ha actualizado. Recarga la página." : "La extensión no responde.";
+      ai.errorDetail = stale ? "" : st.sendError.slice(0, 140);
+    } else if (res.error || !res.step) {
+      ai.error = res.error || "No he podido pensar. Inténtalo otra vez.";
+    } else {
+      ai.step = res.step;
+      ai.el = res.step.targetId ? snap.map.get(res.step.targetId) || null : null;
+      ai.missing = Boolean(res.step.targetId) && !ai.el; // la IA nombró un elemento que no existe: no se marca nada
+      if (res.step.action === "click" && looksRisky(ai.el)) res.step.irreversible = true;
+      if (res.step.done) {
+        send({ type: "PP_END" });
+        ai.doneTimer = setTimeout(endAi, 5000);
+      } else {
+        armStep();
+      }
+    }
+    update();
+  }
+
+  // El paso se da por hecho cuando la persona usa el elemento marcado.
+  function armStep() {
+    const ai = st.ai;
+    const { step, el } = ai;
+    if (!step || step.done || !el) return;
+    const off = [];
+    const on = (target, type, handler, capture) => {
+      target.addEventListener(type, handler, capture);
+      off.push(() => target.removeEventListener(type, handler, capture));
+    };
+    if (step.action === "click") {
+      on(document, "click", (event) => event.composedPath().includes(el) && complete(), true);
+    } else if (step.action === "select") {
+      on(el, "change", complete);
+    } else if (step.action === "type") {
+      let timer = 0;
+      on(el, "input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => ((el.value ?? el.textContent) || "").trim() && complete(), 1500);
+      });
+      off.push(() => clearTimeout(timer));
+    }
+    ai.cleanup = () => off.forEach((fn) => fn());
+  }
+
+  function complete() {
+    const ai = st.ai;
+    if (!ai || ai.completing || !ai.step) return;
+    ai.completing = true;
+    ai.cleanup?.();
+    ai.history = [...ai.history, { text: ai.step.text }].slice(-8);
+    saveSession();
+    Object.assign(ai, { thinking: true, step: null, el: null });
+    update();
+    settle().then(() => st.ai === ai && requestNext());
+  }
+
+  function onNext() {
+    const ai = st.ai;
+    if (!ai) return;
+    if (ai.reload) location.reload();
+    else if (ai.error || ai.step?.stuck || ai.missing) requestNext();
+    else complete();
+  }
+
+  function showAi() {
+    const ai = st.ai;
+    let kind = "step";
+    let text = "Pensando…";
+    let sub = "";
+    let nextLabel = "";
+    if (ai.thinking) {
+      // esperando a la IA
+    } else if (ai.error) {
+      kind = "warn";
+      text = ai.error;
+      sub = ai.errorDetail || "";
+      nextLabel = ai.reload ? "Recargar página" : "Reintentar";
+    } else if (ai.step?.done) {
+      kind = "ok";
+      text = `✔ ${ai.step.text}`;
+    } else if (ai.step) {
+      const s = ai.step;
+      kind = s.irreversible || s.stuck ? "warn" : "step";
+      text = s.text;
+      sub = s.note || (s.irreversible ? "Revisa antes" : "") || (ai.missing ? "No lo veo en pantalla" : "");
+      nextLabel = s.stuck || ai.missing ? "Probar otra vez" : "Siguiente Paso →";
+    }
+
+    open(kind);
+    els.fab.hidden = true;
+    els.pill.hidden = true;
+    els.card.hidden = false;
+    els.card.dataset.kind = kind;
+    ui({ end: true, actions: Boolean(nextLabel) });
+    setText(els.title, `💬 ${ai.goal}`);
+    // Pasos ya hechos (tachados), el actual resaltado. Los siguientes no se conocen: la IA da uno cada vez.
+    const finished = Boolean(ai.step?.done);
+    render({
+      kind,
+      sub,
+      done: finished,
+      counter: finished ? "" : `Paso ${ai.history.length + 1}`,
+      progress: null,
+      items: [
+        ...ai.history.slice(-3).map((h) => ({ text: h.text, state: "done" })),
+        { text, state: finished ? "ok" : "cur", speak: !ai.thinking },
+      ],
+    });
+    setText(els.next, nextLabel);
+
+    setTarget(ai.thinking || ai.error ? null : ai.el);
+    scrollToOnce(st.targetEl, `ai:${ai.seq}`);
+
+    // Si la página cambia de dirección sin que se haya usado el elemento marcado, se pide el siguiente paso.
+    if (ai.step && !ai.step.done && !ai.completing && location.href !== ai.url) complete();
+  }
+
+  async function resume() {
+    const session = await send({ type: "PP_RESUME" });
+    if (!session?.goal || st.ai) return;
+    st.ai = newAi(session.goal, session.history || []);
+    st.mode = "ai";
+    update();
+    await settle(2500, 600);
+    if (st.mode === "ai" && st.ai) requestNext();
+  }
+
+  function update() {
+    st.queued = 0;
+    if (st.mode === "ask") return showAsk();
+    if (st.mode === "ai" && st.ai) return showAi();
+    autoUpdate();
+  }
+
+  const queue = () => {
+    if (!st.queued) st.queued = setTimeout(update, 60);
+  };
 
   // ---------- Se repite en cada fotograma: sigue al elemento marcado y aparta la tarjeta si lo tapa
 
@@ -319,28 +711,31 @@
     }
     els.ring.hidden = !rect;
 
-    const shownBox = !els.card.hidden ? els.card : !els.pill.hidden ? els.pill : null;
+    const shownBox = !els.card.hidden ? els.card : !els.pill.hidden ? els.pill : !els.fab.hidden ? els.fab : null;
     if (!shownBox) return;
     const w = shownBox.offsetWidth;
-    const h = shownBox.offsetHeight;
+    const h2 = shownBox.offsetHeight;
     const cw = document.documentElement.clientWidth;
     const ch = document.documentElement.clientHeight;
     const at = (corner) => {
       const left = corner[1] === "l" ? MARGIN : cw - MARGIN - w;
-      const top = corner[0] === "t" ? MARGIN : ch - MARGIN - h;
-      return { left, top, right: left + w, bottom: top + h };
+      const top = corner[0] === "t" ? MARGIN : ch - MARGIN - h2;
+      return { left, top, right: left + w, bottom: top + h2 };
     };
     const covers = (b) => rect && b.left < rect.right + 12 && b.right > rect.left - 12 && b.top < rect.bottom + 12 && b.bottom > rect.top - 12;
     if (covers(at(st.corner))) {
       const free = CORNERS.find((corner) => !covers(at(corner)));
       if (free) st.corner = free;
     }
-    if (els.card.dataset.pos !== st.corner) els.card.dataset.pos = els.pill.dataset.pos = st.corner;
+    if (els.card.dataset.pos !== st.corner) els.card.dataset.pos = els.pill.dataset.pos = els.fab.dataset.pos = st.corner;
   }
 
   // ---------- Arranque y parada
 
-  const observer = new MutationObserver(queue);
+  const observer = new MutationObserver(() => {
+    st.lastMutation = Date.now();
+    queue();
+  });
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
@@ -358,10 +753,14 @@
     cancelAnimationFrame(st.raf);
     observer.disconnect();
     for (const type of EVENTS) window.removeEventListener(type, queue, true);
+    st.ai?.cleanup?.();
+    clearTimeout(st.ai?.doneTimer);
+    st.ai = null;
     host?.remove();
     delete window.__pasoapasoStop;
   };
 
   update();
   loop();
+  resume();
 })();

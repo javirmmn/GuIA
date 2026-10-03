@@ -1,12 +1,18 @@
 {
   "manifest_version": 3,
   "name": "PasoAPaso",
-  "version": "0.2.0",
-  "description": "Te dice qué hacer, paso a paso, mientras trabajas. No hay que abrir nada.",
+  "version": "0.3.0",
+  "description": "Te dice qué hacer, paso a paso, mientras trabajas. Pregunta a la IA y te guía en cualquier página.",
+  "minimum_chrome_version": "110",
+  "permissions": ["storage"],
+  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["http://localhost/*", "http://127.0.0.1/*", "http://localhost:*/*", "http://127.0.0.1:*/*", "file:///*"],
-      "js": ["tasks.js", "content.js"],
+      "matches": ["<all_urls>"],
+      "js": ["tasks.js", "snapshot.js", "content.js"],
       "run_at": "document_idle"
     }
   ]

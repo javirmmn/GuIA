@@ -1,0 +1,14 @@
+# Claves y configuración local: NUNCA se suben
+.env
+.env.*
+config.local.js
+*.local.js
+
+# Dependencias y salidas
+node_modules/
+dist/
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
