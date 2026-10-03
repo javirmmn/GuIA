@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pedido guardado · Intranet Ejemplo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <div class="layout">
+    <nav id="sidebar" class="sidebar" aria-label="Menú principal"></nav>
+    <main>
+      <div class="breadcrumb"><a href="pedidos.html">Pedidos</a> › Pedido guardado</div>
+      <h1>Pedido guardado</h1>
+      <div id="confirmacion" class="ok" role="status">
+        <p><strong>✔ Pedido <span id="num-pedido"></span> registrado correctamente.</strong></p>
+        <p id="detalle-pedido"></p>
+      </div>
+      <p>
+        <a class="btn" href="pedidos.html">Ver pedidos</a>
+        <a class="btn" href="nuevo-pedido.html">Registrar otro pedido</a>
+      </p>
+    </main>
+  </div>
+  <script src="app.js"></script>
+  <script>
+    const num = new URLSearchParams(location.search).get("num") || "";
+    const pedido = Intranet.getPedidos().find((p) => p.num === num);
+    document.getElementById("num-pedido").textContent = num;
+    if (pedido) {
+      document.getElementById("detalle-pedido").textContent =
+        `${pedido.cliente} · ${pedido.cantidad} × ${pedido.producto} · Pago: ${pedido.pago}`;
+    }
+  </script>
+</body>
+</html>

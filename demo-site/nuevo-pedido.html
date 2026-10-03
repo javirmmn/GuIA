@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nuevo pedido · Intranet Ejemplo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <div class="layout">
+    <nav id="sidebar" class="sidebar" aria-label="Menú principal"></nav>
+    <main>
+      <div class="breadcrumb"><a href="pedidos.html">Pedidos</a> › Nuevo pedido</div>
+      <h1>Nuevo pedido</h1>
+      <p class="sub">Los campos con * son obligatorios.</p>
+
+      <div id="errores" class="errores" role="alert"></div>
+      <p id="aviso-borrador" class="status" role="status"></p>
+
+      <form id="form-pedido" novalidate>
+        <div class="form-grid">
+          <label for="cliente" class="req">Cliente (razón social)</label>
+          <input id="cliente" name="cliente" autocomplete="off">
+
+          <label for="nif" class="req">NIF/CIF del cliente</label>
+          <input id="nif" name="nif" autocomplete="off">
+
+          <label for="producto" class="req">Producto</label>
+          <select id="producto" name="producto">
+            <option value="">Elige un producto…</option>
+            <option>Harina de trigo 25 kg</option>
+            <option>Azúcar 10 kg</option>
+            <option>Aceite de oliva 5 l</option>
+            <option>Levadura 1 kg</option>
+            <option>Cajas de cartón (pack 50)</option>
+            <option>Guantes de trabajo (pack 12)</option>
+          </select>
+
+          <label for="cantidad" class="req">Cantidad</label>
+          <input id="cantidad" name="cantidad" type="number" min="1" step="1">
+
+          <label for="pago" class="req">Forma de pago</label>
+          <select id="pago" name="pago">
+            <option value="">Elige…</option>
+            <option>Transferencia</option>
+            <option>Tarjeta</option>
+            <option>Recibo bancario</option>
+          </select>
+
+          <label for="entrega">Fecha de entrega</label>
+          <input id="entrega" name="entrega" type="date">
+
+          <label for="observaciones">Observaciones</label>
+          <textarea id="observaciones" name="observaciones" rows="3"></textarea>
+        </div>
+
+        <div class="form-actions">
+          <a class="btn" href="pedidos.html">Cancelar</a>
+          <button id="btn-borrador" class="btn" type="button">Guardar borrador</button>
+          <button id="btn-guardar" class="btn success" type="submit">Guardar pedido</button>
+        </div>
+      </form>
+    </main>
+  </div>
+  <script src="app.js"></script>
+  <script>
+    // Mensajes de error "técnicos", como los de muchas aplicaciones reales.
+    const form = document.getElementById("form-pedido");
+    const errorsBox = document.getElementById("errores");
+
+    document.getElementById("btn-borrador").addEventListener("click", () => {
+      document.getElementById("aviso-borrador").textContent = "Borrador guardado. El pedido NO se ha enviado al almacén.";
+    });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = (id) => document.getElementById(id).value.trim();
+      const nif = v("nif").toUpperCase().replace(/[\s.-]/g, "");
+      const checks = [
+        ["cliente", v("cliente").length >= 2, "VAL-101: el campo «Razón social» es obligatorio."],
+        ["nif", /^([A-Z]\d{8}|\d{8}[A-Z]|[A-Z]\d{7}[A-Z0-9])$/.test(nif), "VAL-102: NIF/CIF obligatorio o con formato no válido."],
+        ["producto", v("producto") !== "", "VAL-103: no se ha seleccionado ningún artículo."],
+        ["cantidad", Number.isInteger(Number(v("cantidad"))) && Number(v("cantidad")) > 0, "VAL-104: la cantidad debe ser un número entero mayor que 0."],
+        ["pago", v("pago") !== "", "VAL-105: método de cobro no especificado."],
+      ];
+
+      errorsBox.replaceChildren();
+      const failed = checks.filter(([, ok]) => !ok);
+      for (const [id, ok] of checks) document.getElementById(id).setAttribute("aria-invalid", String(!ok));
+
+      if (failed.length) {
+        const title = document.createElement("strong");
+        title.textContent = "No se ha podido guardar el pedido. Revise los siguientes errores:";
+        const list = document.createElement("ul");
+        for (const [, , message] of failed) {
+          const li = document.createElement("li");
+          li.textContent = message;
+          list.append(li);
+        }
+        errorsBox.append(title, list);
+        return;
+      }
+
+      const record = Intranet.savePedido({
+        cliente: v("cliente"),
+        nif,
+        producto: v("producto"),
+        cantidad: Number(v("cantidad")),
+        pago: v("pago"),
+      });
+      location.href = `pedido-guardado.html?num=${encodeURIComponent(record.num)}`;
+    });
+  </script>
+</body>
+</html>

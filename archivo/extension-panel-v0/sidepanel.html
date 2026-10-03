@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PasoAPaso</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body data-text-size="normal">
+  <header class="app-header">
+    <span class="brand">PasoAPaso</span>
+    <button id="btn-settings" class="icon-btn" type="button" aria-label="Ajustes" title="Ajustes">⚙</button>
+  </header>
+
+  <main>
+    <!-- Inicio: elegir tarea -->
+    <section id="view-home" aria-labelledby="home-title">
+      <h1 id="home-title">Hola. ¿Qué tienes que hacer?</h1>
+      <p class="lead">Elige una tarea. Te ayudo paso a paso.</p>
+      <div id="task-list" class="task-list"></div>
+      <p class="footnote">Prototipo sin IA: las tareas están escritas a mano.</p>
+    </section>
+
+    <!-- Guía paso a paso -->
+    <section id="view-step" hidden aria-labelledby="task-title">
+      <h1 id="task-title" class="task-name"></h1>
+      <p id="step-count" class="step-count"></p>
+      <div id="progress" class="progress" role="progressbar" aria-label="Progreso de la tarea" aria-valuemin="0">
+        <div id="progress-fill"></div>
+      </div>
+
+      <details id="data-box" class="data-box" open>
+        <summary>Datos de la tarea</summary>
+        <dl id="data-list"></dl>
+      </details>
+
+      <div id="notice" class="notice" role="status" hidden>
+        <p id="notice-text"></p>
+        <div id="notice-actions" class="notice-actions"></div>
+      </div>
+
+      <div class="step-card" aria-live="polite">
+        <p id="step-text" class="step-text"></p>
+        <p id="step-simpler" class="step-simpler" hidden></p>
+      </div>
+
+      <div id="warning" class="warning" hidden>
+        <p id="warning-text"></p>
+        <label class="check"><input type="checkbox" id="warning-check"> Lo he revisado</label>
+      </div>
+
+      <div class="actions">
+        <button id="btn-done" class="btn btn-primary" type="button"></button>
+        <div class="actions-row">
+          <button id="btn-repeat" class="btn" type="button"><span aria-hidden="true">🔁</span> Repetir</button>
+          <button id="btn-explain" class="btn" type="button"><span aria-hidden="true">❓</span> No lo entiendo</button>
+        </div>
+        <div class="actions-row">
+          <button id="btn-back" class="btn" type="button"><span aria-hidden="true">⬅</span> Paso anterior</button>
+          <button id="btn-help" class="btn" type="button"><span aria-hidden="true">🙋</span> Pedir ayuda</button>
+        </div>
+      </div>
+
+      <div id="help-box" class="help-box" hidden>
+        <p id="help-text"></p>
+        <a id="help-link" class="btn btn-small" target="_blank" rel="noopener" hidden>Escribir un correo</a>
+        <p id="help-missing" class="small" hidden>Escribe el correo de tu persona de apoyo en Ajustes (⚙).</p>
+      </div>
+
+      <button id="btn-exit" class="btn-link" type="button">Salir de la tarea</button>
+    </section>
+
+    <!-- Tarea terminada -->
+    <section id="view-done" hidden aria-labelledby="done-title">
+      <p class="done-icon" aria-hidden="true">🎉</p>
+      <h1 id="done-title">¡Muy bien!</h1>
+      <p id="done-text" class="lead"></p>
+      <button id="btn-home" class="btn btn-primary" type="button">Volver al inicio</button>
+    </section>
+
+    <!-- Ajustes -->
+    <section id="view-settings" hidden aria-labelledby="settings-title">
+      <h1 id="settings-title">Ajustes</h1>
+      <form id="settings-form" class="settings">
+        <fieldset>
+          <legend>Tamaño de la letra</legend>
+          <label class="check"><input type="radio" name="textSize" value="normal"> Normal</label>
+          <label class="check"><input type="radio" name="textSize" value="grande"> Grande</label>
+          <label class="check"><input type="radio" name="textSize" value="muy-grande"> Muy grande</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Ver y oír</legend>
+          <label class="check"><input type="checkbox" name="highContrast"> Alto contraste</label>
+          <label class="check"><input type="checkbox" name="voice"> Leer en voz alta</label>
+          <label class="field">Velocidad de la voz
+            <input type="range" name="rate" min="0.6" max="1.4" step="0.1">
+          </label>
+          <button id="btn-test-voice" class="btn btn-small" type="button">Probar la voz</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>Mi persona de apoyo</legend>
+          <label class="field">Nombre
+            <input type="text" name="helperName" autocomplete="off">
+          </label>
+          <label class="field">Correo
+            <input type="email" name="helperEmail" autocomplete="off" placeholder="nombre@empresa.es">
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Intranet de ejemplo</legend>
+          <label class="field">Dirección
+            <input type="url" name="demoUrl" autocomplete="off">
+          </label>
+        </fieldset>
+      </form>
+      <button id="btn-settings-back" class="btn btn-primary" type="button">Volver</button>
+    </section>
+  </main>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Correo · Intranet Ejemplo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <div class="layout">
+    <nav id="sidebar" class="sidebar" aria-label="Menú principal"></nav>
+    <main>
+      <h1>Correo</h1>
+      <p class="sub">Bandeja de entrada · laura.garcia@intranet-ejemplo.example</p>
+
+      <div class="mail">
+        <div id="lista-correos" class="mail-list" aria-label="Lista de correos"></div>
+        <section id="lectura" class="mail-read" aria-label="Correo abierto">
+          <p class="vacio">Elige un correo de la lista para leerlo.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+  <script>
+    // Correos ficticios. El de "nóminas" es un intento de fraude (para la futura detección de phishing).
+    const CORREOS = [
+      {
+        id: "jefe",
+        de: "Antonio Pérez",
+        email: "antonio.perez@intranet-ejemplo.example",
+        hora: "9:02",
+        asunto: "Organización de la semana",
+        unread: true,
+        cuerpo:
+          "Laura, como comentamos el otro día, a ver si esta semana podemos ir cerrando lo pendiente de los pedidos de panadería, que López llamó y le corre un poco de prisa, aunque tampoco hay que volverse loco. " +
+          "Ah, y si puedes échale un ojo a lo de Ferretería Martín, que creo que escribió algo. Lo del inventario lo vemos el viernes, salvo que se adelante, que ya te diría.\n\nGracias!!",
+      },
+      {
+        id: "ferreteria",
+        de: "Ferretería Martín",
+        email: "carmen@ferreteria-martin.example",
+        hora: "9:14",
+        asunto: "¿Cuándo llega nuestro pedido?",
+        unread: true,
+        cuerpo:
+          "Buenos días:\n\nHicimos un pedido la semana pasada (pedido 2026-0411). ¿Nos pueden decir qué día llega?\n\nGracias.\nUn saludo,\nCarmen Martín\nFerretería Martín",
+      },
+      {
+        id: "nominas",
+        de: "Departamento de Nóminas",
+        email: "avisos@nominas-verificacion.example",
+        hora: "8:47",
+        asunto: "URGENTE: su nómina está bloqueada",
+        unread: false,
+        cuerpo:
+          "Estimado empleado:\n\nHemos detectado un problema con su cuenta. Si no la verifica en 24 horas, NO recibirá su nómina este mes.\n\n" +
+          "Pulse aquí y escriba su usuario y contraseña: http://nominas-verificacion.example/login\n\nDepartamento de Nóminas",
+      },
+      {
+        id: "rrhh",
+        de: "Recursos Humanos",
+        email: "rrhh@intranet-ejemplo.example",
+        hora: "Ayer",
+        asunto: "Cierre de la oficina el lunes 12",
+        unread: false,
+        cuerpo: "Os recordamos que la oficina estará cerrada el lunes 12 de octubre por la fiesta nacional.\n\nUn saludo,\nRecursos Humanos",
+      },
+    ];
+
+    const list = document.getElementById("lista-correos");
+    const reader = document.getElementById("lectura");
+
+    function el(tag, props = {}, ...children) {
+      const node = Object.assign(document.createElement(tag), props);
+      node.append(...children);
+      return node;
+    }
+
+    function renderList(selectedId) {
+      list.replaceChildren();
+      for (const c of CORREOS) {
+        const item = el(
+          "button",
+          { type: "button", className: "correo-item" },
+          el("span", { className: "de" }, el("span", {}, c.de), el("span", {}, c.hora)),
+          el("span", { className: "asunto" }, c.asunto),
+        );
+        item.dataset.correo = c.id;
+        item.classList.toggle("unread", c.unread);
+        item.classList.toggle("selected", c.id === selectedId);
+        item.addEventListener("click", () => open(c.id));
+        list.append(item);
+      }
+    }
+
+    function open(id) {
+      const c = CORREOS.find((x) => x.id === id);
+      c.unread = false;
+      renderList(id);
+      reader.dataset.abierto = id;
+
+      const replyBox = el(
+        "div",
+        { id: "caja-respuesta", className: "caja-respuesta", hidden: true },
+        el("div", { className: "meta" }, `Para: ${c.de} <${c.email}>`),
+        el("p", { id: "error-correo", className: "errores", role: "alert" }),
+      );
+      const textarea = el("textarea", { id: "respuesta", placeholder: "Escribe tu respuesta…" });
+      textarea.setAttribute("aria-label", "Tu respuesta");
+      const sendBtn = el("button", { id: "btn-enviar", type: "button", className: "btn primary" }, "Enviar");
+      const discardBtn = el("button", { id: "btn-descartar", type: "button", className: "btn" }, "Descartar");
+      replyBox.append(textarea, el("div", { className: "mail-actions" }, sendBtn, discardBtn));
+
+      const sent = el("div", { id: "aviso-enviado", className: "ok", role: "status", hidden: true }, `✔ Correo enviado a ${c.de}.`);
+      const replyBtn = el("button", { id: "btn-responder", type: "button", className: "btn primary" }, "Responder");
+
+      reader.replaceChildren(
+        el("h2", {}, c.asunto),
+        el("div", { className: "meta" }, `De: ${c.de} <${c.email}> · Para: Laura García · ${c.hora}`),
+        el("div", { className: "cuerpo" }, c.cuerpo),
+        el(
+          "div",
+          { className: "mail-actions" },
+          replyBtn,
+          el("button", { type: "button", className: "btn" }, "Reenviar"),
+          el("button", { type: "button", className: "btn" }, "Eliminar"),
+        ),
+        replyBox,
+        sent,
+      );
+
+      replyBtn.addEventListener("click", () => {
+        replyBox.hidden = false;
+        sent.hidden = true;
+        textarea.focus();
+      });
+      discardBtn.addEventListener("click", () => {
+        replyBox.hidden = true;
+        textarea.value = "";
+      });
+      sendBtn.addEventListener("click", () => {
+        const error = document.getElementById("error-correo");
+        if (!textarea.value.trim()) {
+          error.textContent = "No se puede enviar un mensaje vacío (ERR_EMPTY_BODY).";
+          return;
+        }
+        error.textContent = "";
+        replyBox.hidden = true;
+        textarea.value = "";
+        sent.hidden = false;
+      });
+    }
+
+    renderList(null);
+  </script>
+</body>
+</html>

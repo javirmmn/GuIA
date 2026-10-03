@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "PasoAPaso",
+  "version": "0.2.0",
+  "description": "Te dice qué hacer, paso a paso, mientras trabajas. No hay que abrir nada.",
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*", "http://localhost:*/*", "http://127.0.0.1:*/*", "file:///*"],
+      "js": ["tasks.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

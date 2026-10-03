@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "PasoAPaso (prototipo)",
+  "version": "0.1.0",
+  "description": "Te guía paso a paso en las tareas de tu trabajo. Prototipo sin IA con tareas escritas a mano.",
+  "minimum_chrome_version": "116",
+  "action": {
+    "default_title": "Abrir PasoAPaso"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "permissions": ["sidePanel", "storage", "tts", "scripting"],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "file:///*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:*/*", "http://127.0.0.1:*/*", "file:///*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

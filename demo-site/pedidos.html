@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pedidos · Intranet Ejemplo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <div class="layout">
+    <nav id="sidebar" class="sidebar" aria-label="Menú principal"></nav>
+    <main>
+      <h1>Pedidos</h1>
+      <p class="sub">Consulta y registra los pedidos de los clientes.</p>
+
+      <div class="toolbar">
+        <form id="form-buscar" role="search">
+          <input id="buscar" type="search" placeholder="Buscar por cliente…" aria-label="Buscar por cliente">
+          <button id="btn-buscar" class="btn primary" type="submit">Buscar</button>
+        </form>
+        <button class="btn" type="button">Filtros ▾</button>
+        <span class="spacer"></span>
+        <button class="btn" type="button">Exportar a Excel</button>
+        <a id="btn-nuevo-pedido" class="btn success" href="nuevo-pedido.html">+ Nuevo pedido</a>
+      </div>
+
+      <p id="resultado-busqueda" class="status" role="status"></p>
+      <p id="sin-resultados" class="errores" role="alert"></p>
+
+      <table id="tabla-pedidos">
+        <thead>
+          <tr><th>Nº</th><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cantidad</th><th>Estado</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </main>
+  </div>
+  <script src="app.js"></script>
+  <script>
+    const tbody = document.querySelector("#tabla-pedidos tbody");
+    const status = document.getElementById("resultado-busqueda");
+    const noResults = document.getElementById("sin-resultados");
+
+    function render(query) {
+      const q = Intranet.normalize(query || "");
+      const rows = Intranet.getPedidos().filter((p) => !q || Intranet.normalize(p.cliente).includes(q));
+      tbody.replaceChildren();
+      for (const p of rows) {
+        const tr = document.createElement("tr");
+        if (q) tr.className = "fila-encontrada";
+        for (const value of [p.num, p.fecha, p.cliente, p.producto, p.cantidad]) {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.append(td);
+        }
+        const td = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = "estado";
+        badge.textContent = p.estado;
+        td.append(badge);
+        tr.append(td);
+        tbody.append(tr);
+      }
+      status.textContent = q ? `${rows.length} pedido(s) encontrado(s).` : "";
+      noResults.textContent = q && rows.length === 0 ? `No hay pedidos para «${query}». Error de búsqueda SRCH-404.` : "";
+    }
+
+    document.getElementById("form-buscar").addEventListener("submit", (e) => {
+      e.preventDefault();
+      render(document.getElementById("buscar").value);
+    });
+    render("");
+  </script>
+</body>
+</html>
