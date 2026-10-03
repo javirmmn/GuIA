@@ -46,7 +46,7 @@ Y abre http://127.0.0.1:8080/.
 
 - En **cualquier página** verás un botón redondo 💬 abajo a la derecha. Púlsalo, escribe qué quieres hacer y pulsa ➤.
 - La tarjeta dice «Pensando…» un par de segundos y muestra el primer paso, con la marca en la página.
-- Haz el paso. La tarjeta pide el siguiente sola. Si no avanza, pulsa **Siguiente**.
+- Haz el paso. Cuando parece hecho, la tarjeta lo marca en verde con «✔ Hecho», pero **no avanza sola**: pasa al siguiente paso solo cuando pulsas **Siguiente Paso →**.
 - La tarjeta muestra los pasos como lista: los hechos van **tachados en verde**, el actual resaltado con 👉. El resto de la pantalla se oscurece para destacar lo que hay que pulsar. **🔊** lee un paso en voz alta.
 - **Se puede mover:** arrastra la tarjeta por su cabecera (el título), o la burbuja y el botón 💬. Se queda donde la sueltes, también al cambiar de página en esa pestaña. **Doble clic en el título** la devuelve a la esquina automática.
 - **✕** termina la guía. **Esc** cierra la casilla de pregunta.

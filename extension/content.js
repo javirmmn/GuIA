@@ -634,7 +634,7 @@
     if (!ai) return;
     const seq = ++ai.seq;
     ai.cleanup?.();
-    Object.assign(ai, { cleanup: null, thinking: true, step: null, el: null, error: "", errorDetail: "", reload: false, completing: false, missing: false });
+    Object.assign(ai, { cleanup: null, thinking: true, step: null, el: null, error: "", errorDetail: "", reload: false, completing: false, missing: false, stepDone: false });
     update();
 
     const snap = window.PP_snapshot();
@@ -677,19 +677,39 @@
       target.addEventListener(type, handler, capture);
       off.push(() => target.removeEventListener(type, handler, capture));
     };
+    // Solo se AVISA de que el paso parece hecho. Para pasar al siguiente hay que pulsar «Siguiente Paso».
     if (step.action === "click") {
-      on(document, "click", (event) => event.composedPath().includes(el) && complete(), true);
+      on(document, "click", (event) => event.composedPath().includes(el) && markDone(), true);
     } else if (step.action === "select") {
-      on(el, "change", complete);
+      on(el, "change", markDone);
     } else if (step.action === "type") {
       let timer = 0;
       on(el, "input", () => {
         clearTimeout(timer);
-        timer = setTimeout(() => ((el.value ?? el.textContent) || "").trim() && complete(), 1500);
+        if (!((el.value ?? el.textContent) || "").trim()) return unmarkDone(); // vaciado: ya no está hecho
+        timer = setTimeout(markDone, 1500);
       });
       off.push(() => clearTimeout(timer));
     }
     ai.cleanup = () => off.forEach((fn) => fn());
+  }
+
+  function markDone() {
+    const ai = st.ai;
+    if (!ai || !ai.step || ai.stepDone) return;
+    ai.stepDone = true;
+    // Si pulsar ese elemento cambia de página, la guía sigue allí sabiendo que este paso se hizo.
+    if (ai.step.action === "click") {
+      send({ type: "PP_SESSION", session: { goal: ai.goal, history: [...ai.history, { text: ai.step.text }].slice(-8), awaiting: true } });
+    }
+    update();
+  }
+
+  function unmarkDone() {
+    const ai = st.ai;
+    if (!ai || !ai.stepDone) return;
+    ai.stepDone = false;
+    update();
   }
 
   function complete() {
@@ -734,6 +754,7 @@
       text = s.text;
       sub = s.note || (s.irreversible ? "Revisa antes" : "") || (ai.missing ? "No lo veo en pantalla" : "");
       nextLabel = s.stuck || ai.missing ? "Probar otra vez" : "Siguiente Paso →";
+      if (ai.stepDone) sub = "✔ Hecho. Pulsa «Siguiente Paso →»";
     }
 
     open(kind);
@@ -753,16 +774,13 @@
       progress: null,
       items: [
         ...ai.history.slice(-3).map((h) => ({ text: h.text, state: "done" })),
-        { text, state: finished ? "ok" : "cur", speak: !ai.thinking },
+        { text, state: finished || ai.stepDone ? "ok" : "cur", speak: !ai.thinking },
       ],
     });
     setText(els.next, nextLabel);
 
     setTarget(ai.thinking || ai.error ? null : ai.el);
     scrollToOnce(st.targetEl, `ai:${ai.seq}`);
-
-    // Si la página cambia de dirección sin que se haya usado el elemento marcado, se pide el siguiente paso.
-    if (ai.step && !ai.step.done && !ai.completing && location.href !== ai.url) complete();
   }
 
   async function resume() {
@@ -770,6 +788,17 @@
     if (!session?.goal || st.ai) return;
     st.ai = newAi(session.goal, session.history || []);
     st.mode = "ai";
+    if (session.awaiting && st.ai.history.length) {
+      // Se pulsó algo que cambió de página: el paso queda como hecho y se espera a «Siguiente Paso →».
+      const last = st.ai.history.pop();
+      Object.assign(st.ai, {
+        thinking: false,
+        stepDone: true,
+        step: { done: false, stuck: false, text: last.text, targetId: null, action: "read", irreversible: false, note: "" },
+      });
+      update();
+      return;
+    }
     update();
     await settle(2500, 600);
     if (st.mode === "ai" && st.ai) requestNext();
