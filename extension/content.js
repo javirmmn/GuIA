@@ -402,6 +402,11 @@
     els.pill = h("button", { class: "pill", "data-pos": "br", type: "button", hidden: true });
     els.fab = h("button", { class: "fab", "data-pos": "br", type: "button", "aria-label": "Preguntar a la IA", title: "Preguntar a la IA", text: "💬", hidden: true });
     root.append(h("style", { text: CSS }), els.ring, els.card, els.pill, els.fab);
+    // Pulsar un botón de la tarjeta no le quita el cursor al campo de la página (así se puede seguir escribiendo).
+    // Solo la casilla de pregunta de la propia tarjeta puede coger el cursor.
+    root.addEventListener("mousedown", (event) => {
+      if (!event.target.closest?.("input, textarea")) event.preventDefault();
+    });
 
     els.askbtn.addEventListener("click", enterAsk);
     els.fab.addEventListener("click", () => !st.justDragged && enterAsk());
