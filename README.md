@@ -48,6 +48,7 @@ Y abre http://127.0.0.1:8080/.
 - La tarjeta dice «Pensando…» un par de segundos y muestra el primer paso, con la marca en la página.
 - Haz el paso. La tarjeta pide el siguiente sola. Si no avanza, pulsa **Siguiente**.
 - La tarjeta muestra los pasos como lista: los hechos van **tachados en verde**, el actual resaltado con 👉. El resto de la pantalla se oscurece para destacar lo que hay que pulsar. **🔊** lee un paso en voz alta.
+- **Se puede mover:** arrastra la tarjeta por su cabecera (el título), o la burbuja y el botón 💬. Se queda donde la sueltes, también al cambiar de página en esa pestaña. **Doble clic en el título** la devuelve a la esquina automática.
 - **✕** termina la guía. **Esc** cierra la casilla de pregunta.
 - En la intranet de ejemplo, además, la tarjeta aparece sola con las tareas escritas a mano.
 

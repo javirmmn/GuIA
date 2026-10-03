@@ -92,6 +92,10 @@
     }
     @keyframes pulse { 50% { box-shadow: 0 0 0 3px rgba(20, 20, 20, .85), 0 0 4px 0 transparent, 0 0 0 100vmax rgba(15, 23, 42, .5); } }
     @media (prefers-reduced-motion: reduce) { .ring { animation: none; } }
+    /* Se pueden arrastrar: la cabecera de la tarjeta, la burbuja y el botón 💬. */
+    .top { cursor: grab; touch-action: none; user-select: none; }
+    .fab, .pill { cursor: grab; touch-action: none; }
+    .hb { cursor: pointer; }
     :focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
   `;
 
@@ -107,6 +111,8 @@
     lastMutation: Date.now(),
     askFocus: false,
     listSignature: "",
+    pos: null, // posición elegida arrastrando { left, top }; null = esquina automática
+    justDragged: false,
     ai: null,
     queued: 0,
     raf: 0,
@@ -116,6 +122,8 @@
   } catch {
     // sin almacenamiento: la tarjeta empieza abierta
   }
+
+  st.pos = loadPos();
 
   let host = null;
   let els = null;
@@ -274,6 +282,89 @@
     showTask(task, view);
   }
 
+  // ---------- Arrastrar la tarjeta, la burbuja y el botón 💬 (la posición se recuerda en esta pestaña)
+
+  function loadPos() {
+    try {
+      const value = JSON.parse(sessionStorage.getItem("pasoapaso-pos") || "null");
+      return value && Number.isFinite(value.left) && Number.isFinite(value.top) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function savePos() {
+    try {
+      if (st.pos) sessionStorage.setItem("pasoapaso-pos", JSON.stringify(st.pos));
+      else sessionStorage.removeItem("pasoapaso-pos");
+    } catch {
+      // sin almacenamiento: solo vale mientras la página esté abierta
+    }
+  }
+
+  // Coloca el elemento en la posición elegida, sin salirse de la ventana.
+  function clampPos(el, left, top) {
+    const cw = document.documentElement.clientWidth;
+    const ch = document.documentElement.clientHeight;
+    return {
+      left: Math.min(Math.max(0, left), Math.max(0, cw - el.offsetWidth)),
+      top: Math.min(Math.max(0, top), Math.max(0, ch - el.offsetHeight)),
+    };
+  }
+
+  function placeManual(el) {
+    const { left, top } = clampPos(el, st.pos.left, st.pos.top);
+    const css = `left:${Math.round(left)}px;top:${Math.round(top)}px;right:auto;bottom:auto`;
+    if (el.dataset.at !== css) {
+      el.style.cssText = css;
+      el.dataset.at = css;
+    }
+  }
+
+  function resetPos() {
+    st.pos = null;
+    savePos();
+    for (const el of [els.card, els.pill, els.fab]) {
+      el.style.cssText = "";
+      delete el.dataset.at;
+    }
+  }
+
+  // `handle` es lo que se agarra; `box` lo que se mueve. Un clic sin mover sigue siendo un clic.
+  function makeDraggable(handle, box, { ignoreButtons = false } = {}) {
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || (ignoreButtons && event.target.closest("button"))) return;
+      const start = box.getBoundingClientRect();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      let dragging = false;
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch {
+        // sin captura: se arrastra mientras el puntero siga encima
+      }
+      const move = (e) => {
+        if (!dragging && Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
+        dragging = true;
+        st.pos = clampPos(box, start.left + e.clientX - startX, start.top + e.clientY - startY);
+        placeManual(box);
+      };
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+        if (dragging) {
+          st.justDragged = true; // el clic que llega justo después de arrastrar no cuenta
+          setTimeout(() => (st.justDragged = false), 120);
+          savePos();
+        }
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    });
+  }
+
   // ---------- Tarjeta y marca en la página (dentro de un Shadow DOM para no mezclarse con la página)
 
   function ensureOverlay() {
@@ -301,7 +392,7 @@
     els.card = h(
       "div",
       { class: "card", "data-pos": "br", role: "region", "aria-label": "PasoAPaso", hidden: true },
-      h("div", { class: "top" }, els.title, els.counter, h("span", { class: "btns" }, els.askbtn, els.end, els.min)),
+      (els.top = h("div", { class: "top", title: "Arrastra para mover" }, els.title, els.counter, h("span", { class: "btns" }, els.askbtn, els.end, els.min))),
       els.bar,
       els.list,
       els.sub,
@@ -313,10 +404,14 @@
     root.append(h("style", { text: CSS }), els.ring, els.card, els.pill, els.fab);
 
     els.askbtn.addEventListener("click", enterAsk);
-    els.fab.addEventListener("click", enterAsk);
+    els.fab.addEventListener("click", () => !st.justDragged && enterAsk());
     els.end.addEventListener("click", () => (st.mode === "ai" ? endAi() : leaveAsk()));
     els.min.addEventListener("click", () => setCollapsed(true));
-    els.pill.addEventListener("click", () => setCollapsed(false));
+    els.pill.addEventListener("click", () => !st.justDragged && setCollapsed(false));
+    makeDraggable(els.top, els.card, { ignoreButtons: true });
+    makeDraggable(els.pill, els.pill);
+    makeDraggable(els.fab, els.fab);
+    els.top.addEventListener("dblclick", (event) => !event.target.closest("button") && resetPos()); // doble clic: vuelve a la esquina automática
     els.next.addEventListener("click", onNext);
     els.form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -713,6 +808,7 @@
 
     const shownBox = !els.card.hidden ? els.card : !els.pill.hidden ? els.pill : !els.fab.hidden ? els.fab : null;
     if (!shownBox) return;
+    if (st.pos) return placeManual(shownBox); // colocado a mano: no se aparta solo
     const w = shownBox.offsetWidth;
     const h2 = shownBox.offsetHeight;
     const cw = document.documentElement.clientWidth;
