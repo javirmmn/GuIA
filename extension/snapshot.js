@@ -26,10 +26,7 @@
     "[data-tooltip]",
   ].join(",");
 
-  const MAX_IN_VIEW = 120;
-  const MAX_OFFSCREEN = 40;
-
-  const redact = (text, max = 70) =>
+  const redact = (text, max = 50) =>
     String(text || "")
       .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[correo]")
       .replace(/\b[A-Z]{2}\d{2}[A-Z0-9 ]{10,30}\b/g, "[cuenta]")
@@ -118,55 +115,115 @@
   function pageInfo() {
     const headings = deepQueryAll(document, 'h1, h2, h3, [role="heading"]')
       .filter(visibleBox)
-      .map((h) => redact(h.textContent, 60))
+      .map((h) => redact(h.textContent, 50))
       .filter(Boolean)
-      .slice(0, 6);
+      .slice(0, 4);
     const dialogs = deepQueryAll(document, '[role="dialog"], [role="alertdialog"], dialog[open]')
       .filter(visibleBox)
       .map((d) => redact(d.getAttribute("aria-label") || d.querySelector('h1, h2, h3, [role="heading"]')?.textContent || "ventana", 60))
       .slice(0, 4);
     const alerts = deepQueryAll(document, `[role="alert"], [role="status"], [aria-live="assertive"]`)
       .filter(visibleBox)
-      .map((a) => redact(a.textContent, 100))
+      .map((a) => redact(a.textContent, 80))
       .filter(Boolean)
       .slice(0, 4);
-    return { title: redact(document.title, 80), host: location.hostname, path: location.pathname, headings, dialogs, alerts };
+    return { title: redact(document.title, 60), host: location.hostname, path: location.pathname, headings, dialogs, alerts };
   }
 
-  // Devuelve { map: id → elemento, lines: ["[e1] botón \"Redactar\"", …], page }
-  window.PP_snapshot = function snapshot() {
-    const inView = [];
-    const offscreen = [];
-    for (const el of deepQueryAll(document, SELECTOR)) {
+  // ---------- Ahorro de tokens: solo se envía lo que más probablemente hace falta para el siguiente paso.
+
+  const MAX_ITEMS = 70; // elementos como mucho
+  const MAX_CHARS = 3200; // y como mucho estos caracteres de lista (≈ 900 tokens)
+  const SAME_NAME = 2; // elementos repetidos con el mismo nombre (p. ej. «Responder» en cada fila): solo los primeros
+
+  const STOP = new Set("para con por los las del una uno que mis tus sus esta este".split(" "));
+  const words = (text) =>
+    String(text || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .split(/[^a-z0-9ñ]+/)
+      .filter((w) => w.length > 2 && !STOP.has(w))
+      .map((w) => w.slice(0, 5)); // raíz aproximada: «correo» y «correos» cuentan igual
+
+  // Si hay una ventana modal abierta, solo vale lo que hay dentro: lo de detrás no se puede pulsar.
+  function modalRoot() {
+    const modals = deepQueryAll(document, 'dialog[open], [aria-modal="true"]').filter((d) => {
+      if (!visibleBox(d)) return false;
+      return d.tagName !== "DIALOG" || d.matches(":modal");
+    });
+    return modals.at(-1) || null;
+  }
+
+  // Cuánto interesa un elemento: dentro de la pantalla, campos y botones, y lo que se parece al objetivo.
+  function score(item, goalWords) {
+    const link = item.kind === "enlace";
+    const related = goalWords.size > 0 && words(item.name).some((w) => goalWords.has(w));
+    let points = item.onScreen ? 4 : 1;
+    if (!link) points += 2;
+    if (related) points += 3;
+    if (item.kind === "campo de texto" || item.kind === "lista") points += 1;
+    return points;
+  }
+
+  // Línea compacta: «e12 botón "Redactar" (obligatorio, vacío)».
+  function lineOf(id, item) {
+    const flags = flagsOf(item.el, item.kind);
+    if (!item.onScreen) flags.push("fuera");
+    return `${id} ${item.kind}${item.name ? ` "${item.name}"` : ""}${flags.length ? ` (${flags.join(", ")})` : ""}`;
+  }
+
+  // Devuelve { map: id → elemento, meta: id → { kind, name }, lines: ["e1 botón \"Redactar\"", …], page }
+  // `hint`: texto del objetivo y los pasos hechos, para dar prioridad a lo relacionado.
+  window.PP_snapshot = function snapshot(hint = "") {
+    const root = modalRoot();
+    const vh = innerHeight || Infinity; // sin tamaño de ventana (pestaña oculta) se da todo por visible
+    const vw = innerWidth || Infinity;
+    const all = [];
+    const seen = new Map();
+    for (const el of deepQueryAll(root || document, SELECTOR)) {
       if (el.closest?.("#pasoapaso-overlay")) continue;
       const box = visibleBox(el);
       if (!box) continue;
       const kind = kindOf(el);
       const name = nameOf(el);
       if (!name && kind !== "campo de texto" && kind !== "subir archivo") continue;
-      const vh = innerHeight || Infinity; // sin tamaño de ventana (pestaña oculta) se da todo por visible
-      const vw = innerWidth || Infinity;
       const onScreen = box.bottom > 0 && box.top < vh && box.right > 0 && box.left < vw;
-      (onScreen ? inView : offscreen).push({ el, kind, name, onScreen });
+      if (!onScreen && kind === "enlace" && all.length > MAX_ITEMS) continue; // enlaces lejos en páginas grandes: no
+      if (name) {
+        const key = `${kind}|${name}`;
+        const count = (seen.get(key) || 0) + 1;
+        seen.set(key, count);
+        if (count > SAME_NAME) continue;
+      }
+      all.push({ el, kind, name, onScreen, order: all.length });
     }
 
-    const map = new Map();
-    const lines = [];
-    let n = 0;
-    // Si hay demasiados elementos, se prefieren campos y botones a enlaces; el orden de la página se conserva.
-    const pick = (list, max) => {
-      if (list.length <= max) return list;
-      const controls = list.filter((i) => i.kind !== "enlace");
-      const links = list.filter((i) => i.kind === "enlace").slice(0, Math.max(0, max - controls.length));
-      return list.filter((i) => controls.includes(i) || links.includes(i)).slice(0, max);
-    };
-    for (const item of [...pick(inView, MAX_IN_VIEW), ...pick(offscreen, MAX_OFFSCREEN)]) {
-      const id = `e${++n}`;
-      map.set(id, item.el);
-      const flags = flagsOf(item.el, item.kind);
-      if (!item.onScreen) flags.push("fuera de pantalla");
-      lines.push(`[${id}] ${item.kind}${item.name ? ` "${item.name}"` : ""}${flags.length ? ` (${flags.join(", ")})` : ""}`);
+    // Se eligen los que más interesan hasta llenar el presupuesto y se devuelven en el orden de la página.
+    const goalWords = new Set(words(hint));
+    const ranked = all.map((item) => ({ ...item, points: score(item, goalWords) })).sort((a, b) => b.points - a.points || a.order - b.order);
+    const chosen = [];
+    let chars = 0;
+    for (const item of ranked) {
+      if (chosen.length >= MAX_ITEMS) break;
+      const size = item.name.length + 30;
+      if (chars + size > MAX_CHARS) continue;
+      chars += size;
+      chosen.push(item);
     }
-    return { map, lines, page: pageInfo() };
+    chosen.sort((a, b) => a.order - b.order);
+
+    const map = new Map();
+    const meta = new Map(); // para volver a encontrar el elemento si la página lo cambia por otro igual
+    const lines = chosen.map((item, i) => {
+      const id = `e${i + 1}`;
+      map.set(id, item.el);
+      meta.set(id, { kind: item.kind, name: item.name });
+      return lineOf(id, item);
+    });
+    const page = pageInfo();
+    if (root) page.dialogs = [redact(root.getAttribute("aria-label") || root.querySelector("h1, h2, h3")?.textContent || "ventana", 50) + " (solo se ve esta ventana)"];
+    if (all.length > chosen.length) page.omitted = all.length - chosen.length;
+    return { map, meta, lines, page };
   };
 })();

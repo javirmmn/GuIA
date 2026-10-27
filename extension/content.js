@@ -583,24 +583,25 @@
   const looksRisky = (el) => Boolean(el) && RISKY.test(accessibleName(el).slice(0, 60)) && !/borrador|draft|cancel/i.test(accessibleName(el));
 
   function newAi(goal, history = []) {
-    return { goal, history, seq: 0, thinking: true, step: null, el: null, error: "", completing: false, cleanup: null, url: location.href, doneTimer: 0 };
+    return { goal, history, seq: 0, thinking: true, step: null, el: null, target: null, error: "", completing: false, cleanup: null, url: location.href, doneTimer: 0, moved: false };
+  }
+
+  function dropAi() {
+    st.ai?.cleanup?.();
+    clearTimeout(st.ai?.doneTimer);
+    st.ai = null;
   }
 
   function startAi(goal) {
-    st.ai?.cleanup?.();
+    dropAi();
     st.ai = newAi(goal);
     st.mode = "ai";
-    saveSession();
+    send({ type: "PP_START", session: { goal } });
     requestNext();
   }
 
   function endAi() {
-    const ai = st.ai;
-    if (ai) {
-      ai.cleanup?.();
-      clearTimeout(ai.doneTimer);
-    }
-    st.ai = null;
+    dropAi();
     st.mode = "auto";
     send({ type: "PP_END" });
     update();
@@ -618,7 +619,13 @@
     }
   }
 
-  const saveSession = () => st.ai && send({ type: "PP_SESSION", session: { goal: st.ai.goal, history: st.ai.history } });
+  // `current`: el paso que se está haciendo. Si abre otra pestaña, allí se da por hecho.
+  const saveSession = (history = st.ai?.history) => {
+    const ai = st.ai;
+    if (!ai) return;
+    const current = ai.step && !ai.step.done && !ai.step.stuck && !ai.stepDone && history === ai.history ? ai.step.text : "";
+    send({ type: "PP_SESSION", session: { goal: ai.goal, history, current } });
+  };
 
   // Espera a que la página termine de cambiar (después de pulsar algo) antes de volver a mirarla.
   function settle(maxMs = 1800, quietMs = 450) {
@@ -634,19 +641,28 @@
     });
   }
 
-  async function requestNext() {
+  // `fresh`: la persona ha pedido probar otra vez, así que no vale la respuesta guardada.
+  async function requestNext(fresh = false) {
     const ai = st.ai;
-    if (!ai) return;
+    if (!ai || ai.moved) return;
     const seq = ++ai.seq;
     ai.cleanup?.();
-    Object.assign(ai, { cleanup: null, thinking: true, step: null, el: null, error: "", errorDetail: "", reload: false, completing: false, missing: false, stepDone: false });
+    Object.assign(ai, { cleanup: null, thinking: true, step: null, el: null, target: null, error: "", errorDetail: "", reload: false, completing: false, missing: false, stepDone: false });
     update();
 
-    const snap = window.PP_snapshot();
+    const snap = window.PP_snapshot(ai.goal);
+    const snapUrl = location.href;
     st.sendError = "";
-    const res = await send({ type: "PP_NEXT", payload: { goal: ai.goal, history: ai.history, page: snap.page, elements: snap.lines } });
-    if (st.ai !== ai || ai.seq !== seq) return; // se ha cancelado o hay una petición más nueva
+    const res = await send({ type: "PP_NEXT", payload: { goal: ai.goal, history: ai.history, page: snap.page, elements: snap.lines }, fresh });
+    if (st.ai !== ai || ai.seq !== seq || ai.moved) return; // se ha cancelado, hay una petición más nueva o la guía está en otra pestaña
 
+    if (res?.moved) return pause();
+    // La página cambió de dirección mientras la IA pensaba: lo que vio ya no vale, se mira otra vez.
+    if (location.href !== snapUrl && (ai.urlRetries = (ai.urlRetries || 0) + 1) <= 2) {
+      await settle();
+      return st.ai === ai && ai.seq === seq && requestNext();
+    }
+    ai.urlRetries = 0;
     ai.thinking = false;
     ai.url = location.href;
     if (!res) {
@@ -660,19 +676,26 @@
     } else {
       ai.step = res.step;
       ai.el = res.step.targetId ? snap.map.get(res.step.targetId) || null : null;
+      ai.target = ai.el ? snap.meta.get(res.step.targetId) : null;
       ai.missing = Boolean(res.step.targetId) && !ai.el; // la IA nombró un elemento que no existe: no se marca nada
       if (res.step.action === "click" && looksRisky(ai.el)) res.step.irreversible = true;
       if (res.step.done) {
         send({ type: "PP_END" });
         ai.doneTimer = setTimeout(endAi, 5000);
       } else {
+        saveSession();
         armStep();
       }
     }
     update();
   }
 
+  const hasText = (el) => Boolean(((el.value ?? el.textContent) || "").trim());
+  const multiline = (el) => el.tagName === "TEXTAREA" || el.isContentEditable;
+
   // El paso se da por hecho cuando la persona usa el elemento marcado.
+  // Pulsar, elegir o pulsar Enter al escribir pasan solos al siguiente paso.
+  // Mientras se escribe solo se avisa de que está hecho: se pasa con Enter, al salir del campo o con «Siguiente Paso».
   function armStep() {
     const ai = st.ai;
     const { step, el } = ai;
@@ -682,58 +705,123 @@
       target.addEventListener(type, handler, capture);
       off.push(() => target.removeEventListener(type, handler, capture));
     };
-    // Solo se AVISA de que el paso parece hecho. Para pasar al siguiente hay que pulsar «Siguiente Paso».
-    if (step.action === "click") {
-      on(document, "click", (event) => event.composedPath().includes(el) && markDone(), true);
+    const inside = (event) => event.composedPath().includes(el);
+    const later = (fn, ms) => {
+      const timer = setTimeout(fn, ms);
+      off.push(() => clearTimeout(timer));
+    };
+    const nativeSelect = el.tagName === "SELECT";
+    if (step.action === "click" || (step.action === "select" && !nativeSelect)) {
+      // Las listas hechas a mano (no <select>) no avisan al elegir: basta con abrirlas.
+      on(document, "click", (event) => inside(event) && markDone(true), true);
+      on(document, "auxclick", (event) => inside(event) && markDone(), true); // botón central: abre en otra pestaña
     } else if (step.action === "select") {
-      on(el, "change", markDone);
+      on(el, "change", () => markDone(true));
     } else if (step.action === "type") {
       let timer = 0;
       on(el, "input", () => {
         clearTimeout(timer);
-        if (!((el.value ?? el.textContent) || "").trim()) return unmarkDone(); // vaciado: ya no está hecho
+        if (!hasText(el)) return unmarkDone(); // vaciado: ya no está hecho
         timer = setTimeout(markDone, 1500);
       });
       off.push(() => clearTimeout(timer));
+      // Enter: en un campo de una línea es «ya está» (buscar, enviar…). En un texto largo es un salto de línea,
+      // salvo que el campo se vacíe o desaparezca (un chat que envía con Enter).
+      on(
+        window,
+        "keydown",
+        (event) => {
+          if (event.key !== "Enter" || event.shiftKey || event.isComposing || !inside(event) || !hasText(el)) return;
+          if (!multiline(el)) return markDone(true);
+          later(() => (!el.isConnected || !hasText(el)) && markDone(true), 400);
+        },
+        true,
+      );
+      on(document, "submit", (event) => event.target.contains?.(el) && markDone(true), true);
+      // Salir del campo con texto (por ejemplo, pulsando el siguiente campo) también lo da por hecho.
+      on(el, "focusout", () =>
+        later(() => document.hasFocus() && !el.contains(document.activeElement) && el.isConnected && hasText(el) && markDone(true), 0),
+      );
     }
     ai.cleanup = () => off.forEach((fn) => fn());
   }
 
-  function markDone() {
+  function markDone(advance = false) {
     const ai = st.ai;
-    if (!ai || !ai.step || ai.stepDone) return;
-    ai.stepDone = true;
-    // Si pulsar ese elemento cambia de página, la guía sigue allí sabiendo que este paso se hizo.
-    if (ai.step.action === "click") {
-      send({ type: "PP_SESSION", session: { goal: ai.goal, history: [...ai.history, { text: ai.step.text }].slice(-8), awaiting: true } });
+    if (!ai || !ai.step || ai.completing || ai.moved) return;
+    if (!ai.stepDone) {
+      ai.stepDone = true;
+      // Si la página cambia (o se abre otra pestaña), la guía sigue allí sabiendo que este paso se hizo.
+      saveSession([...ai.history, { text: ai.step.text }].slice(-8));
     }
-    update();
+    if (advance) complete();
+    else update();
   }
 
   function unmarkDone() {
     const ai = st.ai;
-    if (!ai || !ai.stepDone) return;
+    if (!ai || !ai.stepDone || ai.completing) return;
     ai.stepDone = false;
+    saveSession();
     update();
   }
 
   function complete() {
     const ai = st.ai;
-    if (!ai || ai.completing || !ai.step) return;
+    if (!ai || ai.completing || !ai.step || ai.moved) return;
     ai.completing = true;
     ai.cleanup?.();
     ai.history = [...ai.history, { text: ai.step.text }].slice(-8);
+    Object.assign(ai, { thinking: true, step: null, el: null, target: null, stepDone: false });
     saveSession();
-    Object.assign(ai, { thinking: true, step: null, el: null });
     update();
-    settle().then(() => st.ai === ai && requestNext());
+    settle().then(() => st.ai === ai && !ai.moved && requestNext());
+  }
+
+  // Comprobaciones en cada cambio de la página mientras hay un paso en pantalla.
+  function watchAi() {
+    const ai = st.ai;
+    if (!ai || ai.thinking || ai.moved || ai.completing || ai.error || !ai.step || ai.step.done) return;
+
+    // La página ha cambiado de dirección (webs que no recargan, como Gmail): el paso se ha hecho.
+    if (location.href !== ai.url) {
+      ai.url = location.href;
+      const typing = ai.step.action === "type" && ai.el?.contains(document.activeElement); // hay webs que cambian la dirección al escribir
+      if (ai.step.stuck || ai.missing) return requestNext();
+      if (!typing) return complete();
+    }
+
+    // La página ha cambiado el elemento marcado por otro igual (pasa mucho en Gmail, React…): se busca de nuevo.
+    if (ai.el && !ai.el.isConnected && ai.target && Date.now() - (ai.relocatedAt || 0) > 400) {
+      ai.relocatedAt = Date.now();
+      const snap = window.PP_snapshot(`${ai.goal} ${ai.target.name}`);
+      const id = [...snap.meta].find(([, m]) => m.kind === ai.target.kind && m.name === ai.target.name)?.[0];
+      if (id) {
+        ai.cleanup?.();
+        ai.el = snap.map.get(id);
+        armStep();
+      }
+    }
+  }
+
+  // La guía se ha ido a otra pestaña (un paso la abrió): esta se queda en espera.
+  function pause() {
+    const ai = st.ai;
+    if (!ai) return;
+    ai.cleanup?.();
+    clearTimeout(ai.doneTimer);
+    ai.seq++; // lo que estuviera pidiendo ya no vale
+    Object.assign(ai, { moved: true, thinking: false, completing: false, step: null, el: null, target: null, error: "", stepDone: false, cleanup: null });
+    st.mode = "ai";
+    update();
   }
 
   function onNext() {
     const ai = st.ai;
     if (!ai) return;
-    if (ai.reload) location.reload();
-    else if (ai.error || ai.step?.stuck || ai.missing) requestNext();
+    if (ai.moved) send({ type: "PP_TAKEOVER" }).then(resume);
+    else if (ai.reload) location.reload();
+    else if (ai.error || ai.step?.stuck || ai.missing) requestNext(true);
     else complete();
   }
 
@@ -743,7 +831,11 @@
     let text = "Pensando…";
     let sub = "";
     let nextLabel = "";
-    if (ai.thinking) {
+    if (ai.moved) {
+      text = "Sigue en la otra pestaña";
+      sub = "Si quieres seguir en esta, pulsa «Seguir aquí».";
+      nextLabel = "Seguir aquí";
+    } else if (ai.thinking) {
       // esperando a la IA
     } else if (ai.error) {
       kind = "warn";
@@ -775,7 +867,7 @@
       kind,
       sub,
       done: finished,
-      counter: finished ? "" : `Paso ${ai.history.length + 1}`,
+      counter: finished || ai.moved ? "" : `Paso ${ai.history.length + 1}`,
       progress: null,
       items: [
         ...ai.history.slice(-3).map((h) => ({ text: h.text, state: "done" })),
@@ -784,35 +876,45 @@
     });
     setText(els.next, nextLabel);
 
-    setTarget(ai.thinking || ai.error ? null : ai.el);
+    setTarget(ai.thinking || ai.error || ai.moved ? null : ai.el);
     scrollToOnce(st.targetEl, `ai:${ai.seq}`);
   }
 
-  async function resume() {
-    const session = await send({ type: "PP_RESUME" });
-    if (!session?.goal || st.ai) return;
-    st.ai = newAi(session.goal, session.history || []);
-    st.mode = "ai";
-    if (session.awaiting && st.ai.history.length) {
-      // Se pulsó algo que cambió de página: el paso queda como hecho y se espera a «Siguiente Paso →».
-      const last = st.ai.history.pop();
-      Object.assign(st.ai, {
-        thinking: false,
-        stepDone: true,
-        step: { done: false, stuck: false, text: last.text, targetId: null, action: "read", irreversible: false, note: "" },
-      });
+  // Al cargar la página (o cuando la guía llega a esta pestaña) se sigue donde se iba.
+  function resume() {
+    st.resuming ||= (async () => {
+      const session = await send({ type: "PP_RESUME" });
+      if (!session?.goal) return;
+      if (st.ai && !st.ai.moved && !session.paused) return; // ya se está guiando aquí
+      dropAi();
+      st.ai = newAi(session.goal, session.history || []);
+      st.mode = "ai";
+      if (session.paused) return pause();
       update();
-      return;
+      await settle(2500, 600);
+      if (st.mode === "ai" && st.ai && !st.ai.moved) requestNext();
+    })().finally(() => (st.resuming = null));
+    return st.resuming;
+  }
+
+  // Avisos del service worker sobre las pestañas.
+  function onMessage(message) {
+    if (message?.type === "PP_MOVED") pause();
+    else if (message?.type === "PP_OWNER") resume();
+    else if (message?.type === "PP_STOP" && st.ai) {
+      dropAi();
+      st.mode = "auto";
+      update();
     }
-    update();
-    await settle(2500, 600);
-    if (st.mode === "ai" && st.ai) requestNext();
   }
 
   function update() {
     st.queued = 0;
     if (st.mode === "ask") return showAsk();
-    if (st.mode === "ai" && st.ai) return showAi();
+    if (st.mode === "ai" && st.ai) {
+      watchAi();
+      return st.ai && showAi();
+    }
     autoUpdate();
   }
 
@@ -875,6 +977,7 @@
   });
   for (const type of EVENTS) window.addEventListener(type, queue, true);
   const tick = setInterval(queue, 1000); // por si algo cambia sin avisar (valores puestos por código, rutas…)
+  safe(() => chrome.runtime.onMessage.addListener(onMessage));
 
   window.__pasoapasoStop = () => {
     clearTimeout(st.queued);
@@ -883,9 +986,8 @@
     cancelAnimationFrame(st.raf);
     observer.disconnect();
     for (const type of EVENTS) window.removeEventListener(type, queue, true);
-    st.ai?.cleanup?.();
-    clearTimeout(st.ai?.doneTimer);
-    st.ai = null;
+    safe(() => chrome.runtime.onMessage.removeListener(onMessage));
+    dropAi();
     host?.remove();
     delete window.__pasoapasoStop;
   };

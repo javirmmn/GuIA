@@ -10,9 +10,10 @@ Tiene dos formas de funcionar:
 ## Cómo funciona la IA
 
 1. Lee la página: nombres de botones, enlaces y campos. **No envía lo que hay escrito en los campos** (solo si están vacíos), ni contraseñas. Tapa correos y números largos.
+   Para gastar pocos tokens solo envía una lista corta (unos 70 elementos como mucho): primero lo que está en pantalla, campos y botones, y lo que se parece a tu objetivo; quita repetidos y, si hay una ventana abierta delante, solo lo que hay en ella. Si se pregunta lo mismo dos veces seguidas (por ejemplo al recargar), reutiliza la respuesta. El consumo real de cada paso sale en la consola del service worker.
 2. Envía eso y tu objetivo a Gemini. Gemini devuelve **un solo paso** con el número del elemento.
 3. La extensión comprueba que ese elemento existe y lo marca. Si la IA inventa uno, no marca nada.
-4. Al usarlo (pulsar, escribir, elegir), mira la página otra vez y pide el siguiente. Si la página cambia, sigue sola.
+4. Al usarlo (pulsar, elegir, o escribir y pulsar Enter) mira la página otra vez y pide el siguiente. Si la página cambia de dirección, sigue sola. Si el paso abre **otra pestaña**, la guía sigue en la pestaña nueva; al cerrarla vuelve a la anterior.
 5. Los pasos que envían, guardan, borran o pagan salen en rojo con un aviso. Si hay que poner contraseñas, códigos o datos bancarios, **no guía**: dice que hace falta ayuda de una persona.
 
 ## Instalación
@@ -46,7 +47,8 @@ Y abre http://127.0.0.1:8080/.
 
 - En **cualquier página** verás un botón redondo 💬 abajo a la derecha. Púlsalo, escribe qué quieres hacer y pulsa ➤.
 - La tarjeta dice «Pensando…» un par de segundos y muestra el primer paso, con la marca en la página.
-- Haz el paso. Cuando parece hecho, la tarjeta lo marca en verde con «✔ Hecho», pero **no avanza sola**: pasa al siguiente paso solo cuando pulsas **Siguiente Paso →**.
+- Haz el paso. Al pulsar o elegir lo marcado, o al escribir y pulsar **Enter** (o pasar a otro campo), avanza solo al siguiente paso. Mientras escribes lo marca en verde con «✔ Hecho»; también puedes pulsar **Siguiente Paso →** en cualquier momento.
+- Si un paso abre otra pestaña, la guía se va con ella. La pestaña anterior dice «Sigue en la otra pestaña» y tiene un botón **Seguir aquí** para traerla de vuelta.
 - La tarjeta muestra los pasos como lista: los hechos van **tachados en verde**, el actual resaltado con 👉. El resto de la pantalla se oscurece para destacar lo que hay que pulsar. **🔊** lee un paso en voz alta.
 - **Se puede mover:** arrastra la tarjeta por su cabecera (el título), o la burbuja y el botón 💬. Se queda donde la sueltes, también al cambiar de página en esa pestaña. **Doble clic en el título** la devuelve a la esquina automática.
 - **✕** termina la guía. **Esc** cierra la casilla de pregunta.

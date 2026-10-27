@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PasoAPaso",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Te dice qué hacer, paso a paso, mientras trabajas. Pregunta a la IA y te guía en cualquier página.",
   "minimum_chrome_version": "110",
   "permissions": ["storage"],
