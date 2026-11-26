@@ -1,4 +1,4 @@
-// PasoAPaso: service worker.
+// GuIA: service worker.
 // - Habla con Gemini (la clave vive aquí, en config.local.js, y nunca llega a las páginas).
 // - Recuerda qué está haciendo la persona en cada pestaña, para seguir si la página se recarga.
 try {

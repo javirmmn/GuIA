@@ -1,6 +1,6 @@
 # Plan del proyecto: extensión de navegador de apoyo laboral con IA
 
-**Nombre provisional:** PasoAPaso
+**Nombre:** GuIA
 **Versión:** 0.1 (borrador para el equipo) · **Fecha:** 3 de octubre de 2026
 
 > Extensión para Chrome (y Edge) que acompaña a personas con discapacidad intelectual o neurodivergencia en las tareas de su trabajo que se hacen en el navegador. Explica qué hacer en lectura fácil, un paso cada vez. Señala en la propia página dónde pulsar, lo lee en voz alta y avisa antes de cualquier acción delicada.

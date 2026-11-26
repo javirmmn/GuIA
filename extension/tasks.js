@@ -1,4 +1,4 @@
-// PasoAPaso: tareas del prototipo (sin IA).
+// GuIA: tareas del prototipo (sin IA).
 //
 // Cada tarea indica:
 //   when     cuándo está activa en la página que se está viendo (gana la primera que coincida)

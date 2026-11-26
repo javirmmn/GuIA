@@ -1,9 +1,9 @@
-// PasoAPaso: tarjeta pequeña en una esquina, con UN paso, y una marca en la página.
+// GuIA: tarjeta pequeña en una esquina, con UN paso, y una marca en la página.
 // Dos modos:
 //   - Automático: en la intranet de ejemplo, tareas escritas a mano (tasks.js) que se detectan solas.
 //   - IA: en cualquier página, la persona escribe qué quiere hacer y Gemini va dando los pasos de uno en uno.
 (() => {
-  window.__pasoapasoStop?.();
+  window.__guiaStop?.();
 
   const DEMO = /^(127\.0\.0\.1|localhost)?$/.test(location.hostname); // las tareas escritas a mano solo valen aquí
   const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -118,7 +118,7 @@
     raf: 0,
   };
   try {
-    st.collapsed = sessionStorage.getItem("pasoapaso-min") === "1";
+    st.collapsed = sessionStorage.getItem("guia-min") === "1";
   } catch {
     // sin almacenamiento: la tarjeta empieza abierta
   }
@@ -286,7 +286,7 @@
 
   function loadPos() {
     try {
-      const value = JSON.parse(sessionStorage.getItem("pasoapaso-pos") || "null");
+      const value = JSON.parse(sessionStorage.getItem("guia-pos") || "null");
       return value && Number.isFinite(value.left) && Number.isFinite(value.top) ? value : null;
     } catch {
       return null;
@@ -295,8 +295,8 @@
 
   function savePos() {
     try {
-      if (st.pos) sessionStorage.setItem("pasoapaso-pos", JSON.stringify(st.pos));
-      else sessionStorage.removeItem("pasoapaso-pos");
+      if (st.pos) sessionStorage.setItem("guia-pos", JSON.stringify(st.pos));
+      else sessionStorage.removeItem("guia-pos");
     } catch {
       // sin almacenamiento: solo vale mientras la página esté abierta
     }
@@ -369,7 +369,7 @@
 
   function ensureOverlay() {
     if (host?.isConnected) return;
-    host = h("div", { id: "pasoapaso-overlay" });
+    host = h("div", { id: "guia-overlay" });
     host.style.cssText = "all: initial; position: fixed; inset: 0; pointer-events: none; z-index: 2147483647; display: none;";
     const root = host.attachShadow({ mode: "open" });
 
@@ -391,7 +391,7 @@
     els.actions = h("div", { class: "actions", hidden: true }, els.next);
     els.card = h(
       "div",
-      { class: "card", "data-pos": "br", role: "region", "aria-label": "PasoAPaso", hidden: true },
+      { class: "card", "data-pos": "br", role: "region", "aria-label": "GuIA", hidden: true },
       (els.top = h("div", { class: "top", title: "Arrastra para mover" }, els.title, els.counter, h("span", { class: "btns" }, els.askbtn, els.end, els.min))),
       els.bar,
       els.list,
@@ -518,7 +518,7 @@
   function setCollapsed(value) {
     st.collapsed = value;
     try {
-      sessionStorage.setItem("pasoapaso-min", value ? "1" : "0");
+      sessionStorage.setItem("guia-min", value ? "1" : "0");
     } catch {
       // sin almacenamiento: solo vale para esta página
     }
@@ -876,7 +876,7 @@
   for (const type of EVENTS) window.addEventListener(type, queue, true);
   const tick = setInterval(queue, 1000); // por si algo cambia sin avisar (valores puestos por código, rutas…)
 
-  window.__pasoapasoStop = () => {
+  window.__guiaStop = () => {
     clearTimeout(st.queued);
     clearTimeout(st.finishTimer);
     clearInterval(tick);
@@ -887,7 +887,7 @@
     clearTimeout(st.ai?.doneTimer);
     st.ai = null;
     host?.remove();
-    delete window.__pasoapasoStop;
+    delete window.__guiaStop;
   };
 
   update();

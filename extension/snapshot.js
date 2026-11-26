@@ -1,4 +1,4 @@
-// PasoAPaso: lee la página actual y hace una lista corta de lo que se puede usar.
+// GuIA: lee la página actual y hace una lista corta de lo que se puede usar.
 // Solo envía nombres de botones, enlaces y campos. NUNCA el contenido de los campos
 // (solo si están vacíos) ni contraseñas. Los correos y los números largos se tapan.
 (() => {
@@ -41,7 +41,7 @@
   function deepQueryAll(root, selector, out = []) {
     out.push(...root.querySelectorAll(selector));
     for (const el of root.querySelectorAll("*")) {
-      if (el.shadowRoot && el.id !== "pasoapaso-overlay") deepQueryAll(el.shadowRoot, selector, out);
+      if (el.shadowRoot && el.id !== "guia-overlay") deepQueryAll(el.shadowRoot, selector, out);
     }
     return out;
   }
@@ -138,7 +138,7 @@
     const inView = [];
     const offscreen = [];
     for (const el of deepQueryAll(document, SELECTOR)) {
-      if (el.closest?.("#pasoapaso-overlay")) continue;
+      if (el.closest?.("#guia-overlay")) continue;
       const box = visibleBox(el);
       if (!box) continue;
       const kind = kindOf(el);

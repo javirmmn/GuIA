@@ -1,9 +1,9 @@
-// PasoAPaso: pide a Gemini UN paso cada vez.
+// GuIA: pide a Gemini UN paso cada vez.
 // Se usa desde el service worker (importScripts) y desde Node (pruebas).
 (function (root) {
   const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
-  const SYSTEM = `Eres PasoAPaso, un asistente que guía a personas con discapacidad intelectual o neurodivergencia, paso a paso, en páginas web.
+  const SYSTEM = `Eres GuIA, un asistente que guía a personas con discapacidad intelectual o neurodivergencia, paso a paso, en páginas web.
 Recibes el OBJETIVO de la persona, los PASOS YA HECHOS y la lista numerada de ELEMENTOS de la página actual.
 Devuelve SOLO EL SIGUIENTE PASO, uno cada vez.
 
