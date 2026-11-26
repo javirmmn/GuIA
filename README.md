@@ -76,5 +76,6 @@ GuIA es un **prototipo para enseñar la idea**, no un producto terminado:
 - ⚠️ No funciona en las páginas internas de Chrome, en PDF ni en webs que lo dibujan todo en un `canvas`, como Google Docs.
 
 <div align="center">
-<sub>Hecho con ❤️ en Málaga por Javier Román Meléndez</sub>
+<sub>Hecho en Málaga por<br>
+Javier Román Meléndez · Mario Cáceres Morales · Noa Ramos Ruiz · Noelia Sánchez Vilchez · Javier Romeo Enríquez de Salamanca</sub>
 </div>
