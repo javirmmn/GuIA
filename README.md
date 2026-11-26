@@ -1,79 +1,80 @@
-# PasoAPaso
+<div align="center">
 
-Extensión de Chrome/Edge que guía paso a paso, con una tarjeta pequeña en una esquina y una marca sobre lo que hay que pulsar. El plan completo está en [PLANNING.md](PLANNING.md).
+# GuIA
 
-Tiene dos formas de funcionar:
+**Un asistente que te guía paso a paso en cualquier página web, marcando en la pantalla dónde pulsar.**
 
-1. **Pasiva (sin IA):** en la intranet de ejemplo detecta sola la tarea y da los pasos. Está escrita a mano en [extension/tasks.js](extension/tasks.js).
-2. **Preguntando a la IA (Gemini), en cualquier página:** pulsas el botón 💬, escribes qué quieres hacer («enviar un correo a mi jefe») y te va dando **un paso cada vez**. Cuando haces el paso, pide el siguiente.
+![Chrome y Edge](https://img.shields.io/badge/Chrome%20%C2%B7%20Edge-Manifest%20V3-2563EB?logo=googlechrome&logoColor=white)
+![Gemini](https://img.shields.io/badge/IA-Gemini%20API-2563EB?logo=googlegemini&logoColor=white)
+![Estado](https://img.shields.io/badge/estado-prototipo%20de%20demo-F5A300)
 
-## Cómo funciona la IA
+</div>
 
-1. Lee la página: nombres de botones, enlaces y campos. **No envía lo que hay escrito en los campos** (solo si están vacíos), ni contraseñas. Tapa correos y números largos.
-2. Envía eso y tu objetivo a Gemini. Gemini devuelve **un solo paso** con el número del elemento.
-3. La extensión comprueba que ese elemento existe y lo marca. Si la IA inventa uno, no marca nada.
-4. Al usarlo (pulsar, escribir, elegir), mira la página otra vez y pide el siguiente. Si la página cambia, sigue sola.
-5. Los pasos que envían, guardan, borran o pagan salen en rojo con un aviso. Si hay que poner contraseñas, códigos o datos bancarios, **no guía**: dice que hace falta ayuda de una persona.
+---
 
-## Instalación
+> *Un paso cada vez, en la propia pantalla, sin tener que pedir ayuda a nadie.*
 
-Hace falta **Node.js** solo para la intranet de ejemplo.
+GuIA es una extensión de navegador pensada para personas con discapacidad intelectual o neurodivergencia que trabajan con aplicaciones web. No hay que abrir nada: una tarjeta pequeña en una esquina dice **qué hacer ahora** con pocas palabras, y el elemento que hay que usar se marca en la página mientras el resto se oscurece. Si la tarea no está prevista, se le pregunta a la IA y te va guiando **un paso cada vez**.
 
-**1. Poner la clave de Gemini** (una vez):
+<div align="center">
+  <img src="docs/img/pasivo-pedido.png" width="410" alt="La tarjeta guía un pedido nuevo: pasos hechos tachados y el campo que toca, marcado">
+  <img src="docs/img/ia-guiando.png" width="410" alt="La IA guía paso a paso y espera a que pulses «Siguiente Paso»">
+  <img src="docs/img/pregunta-ia.png" width="410" alt="Casilla para preguntar a la IA qué quieres hacer">
+  <img src="docs/img/aviso-engano.png" width="410" alt="Aviso de posible engaño al abrir un correo sospechoso">
+</div>
 
-1. Copia `extension/config.example.js` como `extension/config.local.js`.
-2. Pega tu clave de https://aistudio.google.com/apikey en `apiKey`.
+## Cómo funciona
 
-`config.local.js` está en `.gitignore`: **no se sube a GitHub**. No compartas esa carpeta con nadie, porque lleva la clave dentro.
+- **Sola, sin abrir nada.** En la intranet de demo detecta la tarea por la página (un pedido, una búsqueda, un correo) y muestra los pasos. Si te saltas uno o la página da un error, vuelve sola al paso que falta.
+- **Preguntando a la IA, en cualquier web.** Pulsas 💬, escribes qué quieres hacer («enviar un correo a mi jefe») y Gemini te da el siguiente paso. Solo avanzas cuando pulsas **Siguiente Paso →**.
+- **Segura por diseño.** Los pasos que envían, guardan o borran salen en rojo. Nunca te guía para escribir contraseñas ni datos bancarios, y avisa si un correo parece un engaño.
+- **Privada.** A la IA solo le llegan los nombres de los botones y campos de la página. Nunca lo que hay escrito en ellos ni las contraseñas, y los correos y números largos se tapan.
 
-**2. Cargar la extensión en Chrome**
+## Qué hay en este repo
 
-1. Abre `chrome://extensions` y activa **Modo de desarrollador**.
-2. Pulsa **Cargar descomprimida** y elige la carpeta `NBM\extension`.
-3. Si ya estaba cargada, pulsa ↻ y recarga las páginas abiertas (F5).
+| | |
+|---|---|
+| 🧩&nbsp;**[`extension/`](extension)** | La extensión (Manifest V3, JavaScript sin compilar). [`content.js`](extension/content.js) pinta la tarjeta y la marca, [`snapshot.js`](extension/snapshot.js) lee la página, [`gemini.js`](extension/gemini.js) habla con la IA y [`tasks.js`](extension/tasks.js) tiene las tareas de la demo. |
+| 🏢&nbsp;**[`demo-site/`](demo-site)** | «Intranet Ejemplo, S. L.»: una intranet inventada con pedidos y correo para probar sin datos reales. Incluye un correo fraudulento. |
+| 📄&nbsp;**[`PLANNING.md`](PLANNING.md)** | El plan del proyecto: usuarios, principios de diseño, arquitectura, privacidad y marco legal (RGPD, Reglamento de IA) y fases. |
+| 🗃️&nbsp;**[`archivo/`](archivo)** | La primera versión, con panel lateral. La descartamos por ser demasiado compleja para quien la iba a usar. |
 
-En Edge es igual, desde `edge://extensions`.
+## Probarlo
 
-**3. (Opcional) Intranet de ejemplo**, desde la carpeta `NBM`:
+**Requisitos:** Chrome o Edge, [Node.js](https://nodejs.org) para la intranet de demo y una clave gratuita de la [API de Gemini](https://aistudio.google.com/apikey) para el modo IA.
+
+**1. Descarga el repo y pon tu clave.** Copia `extension/config.example.js` como `extension/config.local.js` y pega tu clave en `apiKey`. Ese archivo está en `.gitignore`, así que nunca se sube.
+
+```bash
+git clone https://github.com/javirmmn/GuIA.git
+```
+
+```bash
+copy GuIA\extension\config.example.js GuIA\extension\config.local.js
+```
+
+**2. Carga la extensión.** Abre `chrome://extensions` (o `edge://extensions`), activa el **Modo de desarrollador**, pulsa **Cargar descomprimida** y elige la carpeta `extension`.
+
+**3. Arranca la intranet de demo** desde la carpeta del repo y abre http://127.0.0.1:8080:
 
 ```bash
 node demo-site/server.js
 ```
 
-Y abre http://127.0.0.1:8080/.
+Entra en **Pedidos → Nuevo pedido** para ver la guía automática, o pulsa 💬 en cualquier página y escribe, por ejemplo, «registrar un pedido nuevo».
 
-## Cómo se usa
+## Lo que es (y lo que no)
 
-- En **cualquier página** verás un botón redondo 💬 abajo a la derecha. Púlsalo, escribe qué quieres hacer y pulsa ➤.
-- La tarjeta dice «Pensando…» un par de segundos y muestra el primer paso, con la marca en la página.
-- Haz el paso. Cuando parece hecho, la tarjeta lo marca en verde con «✔ Hecho», pero **no avanza sola**: pasa al siguiente paso solo cuando pulsas **Siguiente Paso →**.
-- La tarjeta muestra los pasos como lista: los hechos van **tachados en verde**, el actual resaltado con 👉. El resto de la pantalla se oscurece para destacar lo que hay que pulsar. **🔊** lee un paso en voz alta.
-- **Se puede mover:** arrastra la tarjeta por su cabecera (el título), o la burbuja y el botón 💬. Se queda donde la sueltes, también al cambiar de página en esa pestaña. **Doble clic en el título** la devuelve a la esquina automática.
-- **✕** termina la guía. **Esc** cierra la casilla de pregunta.
-- En la intranet de ejemplo, además, la tarjeta aparece sola con las tareas escritas a mano.
+GuIA es un **prototipo para enseñar la idea**, no un producto terminado:
 
-Prueba rápida: abre la intranet, pulsa 💬 y escribe «registrar un pedido nuevo».
+- ✅ La guía automática funciona de principio a fin en la intranet de demo, sin IA.
+- ✅ El modo IA guía tareas completas en la intranet de demo y en una página que imita a Gmail.
+- ✅ Diseño pensado para la accesibilidad cognitiva: frases cortas, un paso cada vez, botones grandes y lectura en voz alta.
+- ⚠️ **La clave de Gemini se guarda dentro de la extensión.** Vale para probar en tu ordenador; para repartirla haría falta un servidor que la guarde.
+- ⚠️ **El nivel gratuito de Gemini** permite unas pocas peticiones por minuto y Google puede usar los datos para mejorar sus productos. Usa solo datos inventados.
+- ⚠️ En tareas largas la IA puede perder el hilo: cada paso se pide por separado, con el modelo más pequeño de Gemini.
+- ⚠️ No funciona en las páginas internas de Chrome, en PDF ni en webs que lo dibujan todo en un `canvas`, como Google Docs.
 
-## Límites y avisos
-
-- **Datos y privacidad.** Lo que se lee de la página sale hacia Google cuando preguntas. Con el **nivel gratuito**, Google puede usarlo para mejorar sus productos, y sus condiciones no permiten usarlo con usuarios del Espacio Económico Europeo, Suiza o Reino Unido. **Para la demo, usa solo datos ficticios.** Para uso real hace falta activar la facturación o usar Azure OpenAI (ver PLANNING.md).
-- **La clave está dentro de la extensión** (en tu carpeta). Vale para una demo en tu ordenador. Para repartirla hace falta un servidor intermedio que guarde la clave.
-- **Cuota gratuita:** unas 10 preguntas por minuto. Si sale «Hay muchas preguntas», espera un momento y pulsa «Probar otra vez».
-- **Permisos:** la extensión se activa en **todas las páginas** (`<all_urls>`) y muestra el aviso de Chrome «leer y cambiar sus datos en todos los sitios». Solo habla con Google cuando preguntas. Para un piloto en empresa conviene limitarla a sus dominios.
-- **Qué no ve:** páginas internas de Chrome (`chrome://`), la tienda de extensiones, PDF, y webs que dibujan todo en un `canvas` (Google Docs, por ejemplo). Tampoco entra en `iframe`. Para abrir archivos locales hay que activar «Permitir el acceso a las URL de archivo» en la extensión.
-- **La IA puede equivocarse.** Si dice algo que no cuadra, pulsa ✕ y pide ayuda a una persona.
-- **Gmail y Outlook** tienen páginas complejas. Está probado con una página que imita a Gmail y con la intranet; en el correo real hay que probarlo y ajustarlo.
-
-## Archivos
-
-| Archivo | Para qué |
-|---|---|
-| `extension/manifest.json` | Permisos y archivos de la extensión |
-| `extension/content.js` | Tarjeta, marca en la página y bucle de pasos |
-| `extension/snapshot.js` | Lee la página (qué botones y campos hay) |
-| `extension/background.js` | Habla con Gemini y recuerda la guía si la página se recarga |
-| `extension/gemini.js` | Instrucciones y llamada a Gemini |
-| `extension/tasks.js` | Tareas escritas a mano (solo intranet de ejemplo) |
-| `extension/config.local.js` | **Tu clave. No se sube a GitHub** |
-| `demo-site/` | Intranet ficticia |
-| `archivo/extension-panel-v0/` | Primera versión con panel lateral (ya no se usa) |
+<div align="center">
+<sub>Hecho con ❤️ en Málaga por Javier Román Meléndez</sub>
+</div>
